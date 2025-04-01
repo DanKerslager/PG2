@@ -1,0 +1,4 @@
+C:\Users\danke\Downloads\TUL\PG2\PG2_2025\vcpkg_installed\x64-windows\vcpkg\blds\glew\config-x64-windows-dbg-CMakeCache.txt.log
+C:\Users\danke\Downloads\TUL\PG2\PG2_2025\vcpkg_installed\x64-windows\vcpkg\blds\glew\config-x64-windows-dbg-CMakeConfigureLog.yaml.log
+C:\Users\danke\Downloads\TUL\PG2\PG2_2025\vcpkg_installed\x64-windows\vcpkg\blds\glew\config-x64-windows-dbg-out.log
+C:\Users\danke\Downloads\TUL\PG2\PG2_2025\vcpkg_installed\x64-windows\vcpkg\blds\glew\config-x64-windows-dbg-err.log
