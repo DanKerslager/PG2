@@ -1,7 +1,9 @@
 #pragma once
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-#include "Model.hpp"  // Ensure this is your Model class
+#include "Model.hpp"
+#include "LightSource.hpp"
+
 
 class Entity {
 public:
@@ -98,10 +100,10 @@ public:
     }
 
     // Render the entity
-    void render(GLuint shaderProgram, const glm::mat4& projection, const glm::mat4& view) {
+    void render(GLuint shaderProgram, const glm::mat4& projection, const glm::mat4& view, const DirectionalLight sun) {
         if (model) {
             // Pass transformation data down instead of setting MVP here
-            model->draw(projection, view, position, glm::vec3(0.0f, -yaw, 0.0f));
+            model->draw(projection, view, sun, position, glm::vec3(0.0f, -yaw, 0.0f));
         }
     }
 

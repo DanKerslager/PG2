@@ -14,7 +14,7 @@ public:
         : Entity(startPosition, entityModel), sensitivity(0.1f), firstMouse(true),
         lastX(400), lastY(300),
         viewpointOffset(glm::vec3(0.0f, 1.5f, 5.0f)), // First-person offset (head position)
-        thirdPersonOffset(glm::vec3(0.0f, 5.0f, 15.0f)), // Third-person offset (behind player)
+        thirdPersonOffset(glm::vec3(0.0f, 10.0f, 25.0f)), // Third-person offset (behind player)
         thirdPerson(true) // Start in first-person mode
     {
     }
@@ -55,6 +55,10 @@ public:
 
     void swapViewMode() {
         thirdPerson = !thirdPerson;
+        if (model) {
+            if (thirdPerson) { model->alpha = 1; }
+            else { model->alpha = 0; }
+        }
     }
 
     // Compute the View Matrix for rendering
@@ -65,6 +69,15 @@ public:
         }
         else {
             return glm::lookAt(position + viewpointOffset, position + front + viewpointOffset, up);
+        }
+    }
+
+    glm::vec3 getEfPos() {
+        if (thirdPerson) {
+            return position - front * thirdPersonOffset.z + glm::vec3(0.0f, thirdPersonOffset.y, 0.0f);
+        }
+        else {
+            return position + viewpointOffset;
         }
     }
 };

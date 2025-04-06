@@ -30,6 +30,7 @@
     <ClInclude Include="app.hpp" />
     <ClInclude Include="Camera.hpp" />
     <ClInclude Include="entity.hpp" />
+    <ClInclude Include="LightSource.hpp" />
     <ClInclude Include="mapgen.hpp" />
     <ClInclude Include="Vertex.hpp" />
     <ClInclude Include="gl_err_callback.h" />

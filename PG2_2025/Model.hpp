@@ -13,6 +13,7 @@
 #include "Mesh.hpp"
 #include "ShaderProgram.hpp"
 #include "OBJloader.hpp"
+#include "LightSource.hpp"
 
 class Model {
 public:
@@ -23,7 +24,7 @@ public:
     ShaderProgram shader{};
     std::mutex load_mutex;
     GLuint texture_id = 0;
-    bool transparent{ false };
+    float alpha = 1.0f;
 
     // Constructor
     Model(const std::filesystem::path& filename, ShaderProgram& shader)
@@ -62,7 +63,7 @@ public:
         texture_id = tex;
     }
 
-    void draw(const glm::mat4& projection, const glm::mat4& view,
+    void draw(const glm::mat4& projection, const glm::mat4& view, const DirectionalLight sun,
         const glm::vec3& offset = glm::vec3(0.0f),
         const glm::vec3& rotation = glm::vec3(0.0f)) {
         std::lock_guard<std::mutex> lock(load_mutex);
@@ -75,11 +76,9 @@ public:
         }
 
         for (auto& mesh : meshes) {
-            mesh.draw(projection, view, origin + offset, orientation + rotation);
+            mesh.draw(projection, view, sun, origin + offset, orientation + rotation, alpha);
         }
     }
-
-
 
 private:
     void loadModelAsync(const std::filesystem::path& path) {

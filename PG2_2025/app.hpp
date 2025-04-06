@@ -12,6 +12,7 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/core.hpp>  // Ensure core OpenCV components are included
 #include "mapgen.hpp"
+#include "LightSource.hpp"
 
 
 class App {
@@ -30,7 +31,7 @@ private:
     double timeDiff;    
     unsigned int counter = 0;
     std::unordered_map<std::string, Model> scene;
-    std::unordered_map<std::string, Entity> entities;
+    std::unordered_map<std::string, Entity*> entities;
     std::vector<Entity*> transparent;
 
 
@@ -41,6 +42,7 @@ public:
     static GLuint textureInit(const std::filesystem::path& file_name);
     static GLuint gen_tex(cv::Mat& image);
     void init_hm();
+    DirectionalLight sun;
 
     static int aa;
 

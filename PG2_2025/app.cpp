@@ -150,6 +150,10 @@ bool App::init(int aa = 1)
             return false;
         }
 
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+
         // Step 8: Configure V-Sync
         App::vsync_on = true;
         glfwSwapInterval((vsync_on ? 1 : 0));
@@ -257,19 +261,25 @@ void App::init_assets(void) {
     }
     glUseProgram(shader_prog_ID);
 
-    // Load player model
-    Model* playerModel = new Model("assets/obj/teapot_tri_vnt.obj", my_shader);
-    //camera.addModel(playerModel);
-
     scene.emplace("plane", Model("assets/obj/plane_tri_vnt.obj", my_shader));
 
     Model* teapotModel = new Model("assets/obj/teapot_tri_vnt.obj", my_shader);
     GLuint tex = textureInit("assets/box.png");
     teapotModel->setTexture(tex);
-    entities.emplace("teapot", Entity(glm::vec3(20, 5, 5), teapotModel));
+    teapotModel->alpha = 0.5f;
+    entities.emplace("teapot", new Entity(glm::vec3(20, 5, 5), teapotModel));
+    entities.emplace("teapot2", new Entity(glm::vec3(30, 5, 5), teapotModel));
+
+    Model* cameraModel = new Model("assets/obj/teapot_tri_vnt.obj", my_shader);
+
+    camera.addModel(cameraModel);
+    cameraModel->setTexture(tex);
+    entities.insert(std::make_pair("camera", &camera));
 
     Model* FishModel = new Model("assets/obj/fish.obj", my_shader);
-    entities.emplace("fish", Entity(glm::vec3(5, 5, 5), FishModel));
+    Entity* fish = new Entity(glm::vec3(5, 5, 5), FishModel);
+    entities.emplace("fish", fish); // passes a pointer
+
 
     // Create and load data into GPU using OpenGL DSA (Direct State Access)
     glCreateVertexArrays(1, &VAO_ID);
@@ -335,11 +345,19 @@ int App::run(void)
             float currentFrame = glfwGetTime();
             float deltaTime = currentFrame - lastFrame;
             lastFrame = currentFrame;
-            camera.update(deltaTime, 1);
+
             camera.processKeyboard(pressedKeys, deltaTime);
             for (auto& [name, entity] : entities) {
-                entity.update(deltaTime, 1);
+                float height = height_map.getHeightAt(entity->position);
+                entity->update(deltaTime, height);
+                
             }
+
+            float sunAngle = currentFrame * 2.0f; // radians per second
+
+            sun.direction = glm::normalize(glm::vec3(cos(sunAngle), -1.0f, sin(sunAngle)));
+            float elevation = glm::clamp(-sun.direction.y, 0.0f, 1.0f);
+            sun.color = glm::mix(glm::vec3(1.0f, 0.5f, 0.2f), glm::vec3(1.0f), elevation);
 
             // FPS calculations
             crntTime = glfwGetTime();
@@ -375,38 +393,38 @@ int App::run(void)
                 std::cerr << "ERROR: uMVP uniform not found in shader!" << std::endl;
             }
 
-            height_map.draw(projection, view);
+            height_map.draw(projection, view, sun);
 
 
             // Iterate through the scene and render each model using `model.draw()`
             for (auto& [name, model] : scene) {
-                model.draw(projection, view);
+                model.draw(projection, view, sun);
             }
 
+            transparent.clear();
             // Render Dynamic Entities (Entities)
             for (auto& [name, entity] : entities) {
                 //entity.jump(10);
                 //entity.rotate(5, 0);
-                if (!entity.model->transparent) {
-                    entity.render(shader_prog_ID, projection, view);
+                if (entity->model->alpha == 1) {
+                    entity->render(shader_prog_ID, projection, view, sun);
                 }
                 else {
-                    transparent.push_back(&entity);
+                    transparent.push_back(entity);
                 }
             }
 
             std::sort(transparent.begin(), transparent.end(), [&](Entity const* a, Entity const* b) {
-                return glm::distance(camera.position, a->position) > glm::distance(camera.position, b->position);
+                return glm::distance(camera.getEfPos(), a->position) > glm::distance(camera.getEfPos(), b->position);
                 });
 
-
-
-            for (auto& [name, entity] : entities) {
-                entity.model->transparent = true;
-                entity.render(shader_prog_ID, projection, view);
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            glDepthMask(GL_FALSE);
+            for (Entity* entity : transparent) {
+                entity->render(shader_prog_ID, projection, view, sun);
             }
-
-            camera.render(shader_prog_ID, projection, view);
+            glDepthMask(GL_TRUE); // re-enable depth writes
 
             // Poll events and swap buffers
             glfwPollEvents();
