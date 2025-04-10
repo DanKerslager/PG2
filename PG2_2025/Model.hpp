@@ -26,6 +26,11 @@ public:
     GLuint texture_id = 0;
     float alpha = 1.0f;
 
+    glm::vec3 boundingBoxMin;
+    glm::vec3 boundingBoxMax;
+    float boundingSphereRadius;
+
+
     // Constructor
     Model(const std::filesystem::path& filename, ShaderProgram& shader)
         : shader(shader) {
@@ -63,7 +68,7 @@ public:
         texture_id = tex;
     }
 
-    void draw(const glm::mat4& projection, const glm::mat4& view, const DirectionalLight sun,
+    void draw(const glm::mat4& projection, const glm::mat4& view, const std::vector<LightSource*> lights,
         const glm::vec3& offset = glm::vec3(0.0f),
         const glm::vec3& rotation = glm::vec3(0.0f)) {
         std::lock_guard<std::mutex> lock(load_mutex);
@@ -76,7 +81,7 @@ public:
         }
 
         for (auto& mesh : meshes) {
-            mesh.draw(projection, view, sun, origin + offset, orientation + rotation, alpha);
+            mesh.draw(projection, view, lights, origin + offset, orientation + rotation, alpha);
         }
     }
 
@@ -111,14 +116,39 @@ private:
         std::vector<Vertex> vertexData;
         std::vector<unsigned int> indices;
 
+        glm::vec3 minBB(FLT_MAX);
+        glm::vec3 maxBB(-FLT_MAX);
+
         for (size_t i = 0; i < vertices.size(); ++i) {
             Vertex vertex;
             vertex.Position = vertices[i];
+
+            // Compare each component manually
+            if (vertex.Position.x < minBB.x) minBB.x = vertex.Position.x;
+            if (vertex.Position.y < minBB.y) minBB.y = vertex.Position.y;
+            if (vertex.Position.z < minBB.z) minBB.z = vertex.Position.z;
+
+            if (vertex.Position.x > maxBB.x) maxBB.x = vertex.Position.x;
+            if (vertex.Position.y > maxBB.y) maxBB.y = vertex.Position.y;
+            if (vertex.Position.z > maxBB.z) maxBB.z = vertex.Position.z;
+
             if (!normals.empty()) vertex.Normal = normals[i];
             if (!uvs.empty()) vertex.TexCoords = uvs[i];
             vertexData.push_back(vertex);
             indices.push_back(static_cast<unsigned int>(i));
         }
+
+
+        glm::vec3 center = (minBB + maxBB) * 0.5f;
+        float boundingSphereRadius = 0.0f;
+        for (const auto& v : vertices) {
+            float dist = glm::distance(v, center);
+            if (dist > boundingSphereRadius)
+                boundingSphereRadius = dist;
+        }
+
+        boundingBoxMin = minBB;
+        boundingBoxMax = maxBB;
 
         std::cout << "   Final Vertex Count: " << vertexData.size() << std::endl;
         std::cout << "   Index Count: " << indices.size() << std::endl;

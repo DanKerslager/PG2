@@ -4,10 +4,52 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-struct DirectionalLight {
-    glm::vec3 direction;
-    glm::vec3 color;
-    glm::vec3 ambient = glm::vec3(0.2f);
+class LightSource {
+public:
+    glm::vec3 color = glm::vec3(1.0f);
+    glm::vec3 ambient = glm::vec3(0.1f);
     glm::vec3 diffuse = glm::vec3(0.8f);
     glm::vec3 specular = glm::vec3(1.0f);
+
+    virtual void apply(GLuint shaderID, int index) const = 0; // each light applies itself
+    virtual std::string getType() const = 0; // "directional", "point", etc.
+    virtual ~LightSource() = default;
+};
+
+class SpotLight : public LightSource {
+public:
+    glm::vec3 position;
+    glm::vec3 direction;
+    float cutOff;
+    float outerCutOff;
+
+    void apply(GLuint shaderID, int index) const override {
+        std::string prefix = "spotLights[" + std::to_string(index) + "]";
+        glUniform3fv(glGetUniformLocation(shaderID, (prefix + ".position").c_str()), 1, glm::value_ptr(position));
+        glUniform3fv(glGetUniformLocation(shaderID, (prefix + ".direction").c_str()), 1, glm::value_ptr(direction));
+        glUniform1f(glGetUniformLocation(shaderID, (prefix + ".cutOff").c_str()), cutOff);
+        glUniform1f(glGetUniformLocation(shaderID, (prefix + ".outerCutOff").c_str()), outerCutOff);
+        glUniform3fv(glGetUniformLocation(shaderID, (prefix + ".color").c_str()), 1, glm::value_ptr(color));
+        glUniform3fv(glGetUniformLocation(shaderID, (prefix + ".ambient").c_str()), 1, glm::value_ptr(ambient));
+        glUniform3fv(glGetUniformLocation(shaderID, (prefix + ".diffuse").c_str()), 1, glm::value_ptr(diffuse));
+        glUniform3fv(glGetUniformLocation(shaderID, (prefix + ".specular").c_str()), 1, glm::value_ptr(specular));
+    }
+
+    std::string getType() const override { return "spot"; }
+};
+
+class DirectionalLight : public LightSource {
+public:
+    glm::vec3 direction;
+
+    void apply(GLuint shaderID, int index) const override {
+        std::string prefix = "dirLights[" + std::to_string(index) + "]";
+        glUniform3fv(glGetUniformLocation(shaderID, (prefix + ".direction").c_str()), 1, glm::value_ptr(direction));
+        glUniform3fv(glGetUniformLocation(shaderID, (prefix + ".color").c_str()), 1, glm::value_ptr(color));
+        glUniform3fv(glGetUniformLocation(shaderID, (prefix + ".ambient").c_str()), 1, glm::value_ptr(ambient));
+        glUniform3fv(glGetUniformLocation(shaderID, (prefix + ".diffuse").c_str()), 1, glm::value_ptr(diffuse));
+        glUniform3fv(glGetUniformLocation(shaderID, (prefix + ".specular").c_str()), 1, glm::value_ptr(specular));
+    }
+
+    std::string getType() const override { return "directional"; }
 };

@@ -74,6 +74,9 @@
     <ClInclude Include="LightSource.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Behaviors.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Image Include="assets\box.png">

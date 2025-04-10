@@ -36,6 +36,7 @@
 #include "app.hpp"
 #include "ShaderProgram.hpp"
 #include "Model.hpp"
+#include "Behaviors.hpp"
 
 GLFWwindow* window = nullptr;
 App::App()
@@ -191,7 +192,7 @@ void App::init_hm()
         throw std::runtime_error("ERR: Height map empty? File: " + hm_file.string());
     }
 
-    height_map = MapGen::GenHeightMap(hmap, 10, heightScale);
+    height_map = MapGen::GenHeightMap(hmap, 4, heightScale);
     std::cout << "Note: Heightmap vertices: " << height_map.vertices.size() << std::endl;
 }
 
@@ -328,13 +329,32 @@ int App::run(void)
         // Activate shader program
         glUseProgram(shader_prog_ID);
 
+        debug = false;
+        ShaderProgram debug_shader("assets/shaders/debug.vert",
+            "assets/shaders/debug.frag");
+        glDebugMessageControl(GL_DEBUG_SOURCE_API, GL_DEBUG_TYPE_OTHER, GL_DEBUG_SEVERITY_NOTIFICATION, 0, nullptr, GL_FALSE);
+
+
+        DirectionalLight* sun = new DirectionalLight();
+        SpotLight* flashlight = new SpotLight();
+        flashlight->color = glm::vec3(0.2f, 0.2f, 1.0f);
+        flashlight->cutOff = glm::cos(glm::radians(12.5f));
+        flashlight->outerCutOff = glm::cos(glm::radians(17.5f));
+        lights.push_back(sun);
+        lights.push_back(flashlight);
+
+        entities["teapot"]->addBehavior(Behaviors::WalkInCircle(glm::vec3(10, 0, 10), 5.0f, 10.0f));
+        entities["teapot"]->addBehavior(Behaviors::Spin());
+        entities["teapot"]->addBehavior(Behaviors::PeriodicJump(7.0f, 3.0f));
+
+
         // Get uniform location in GPU program
         GLint uniform_color_location = glGetUniformLocation(shader_prog_ID, "uniform_Color");
         if (uniform_color_location == -1) {
             std::cerr << "Uniform location is not found in active shader program. Did you forget to activate it?\n";
         }
 
-        glClearColor(1.0f, 0.0f, 0.0f, 1.0f); // RED background
+        //glClearColor(1.0f, 0.0f, 0.0f, 1.0f); // RED background
         glEnable(GL_DEPTH_TEST); // Enable depth testing
 
 
@@ -352,12 +372,37 @@ int App::run(void)
                 entity->update(deltaTime, height);
                 
             }
+            flashlight->position = camera.position;
+            flashlight->direction = camera.front;
 
             float sunAngle = currentFrame * 2.0f; // radians per second
+            sun->direction = glm::normalize(glm::vec3(cos(sunAngle), -1.0f, sin(sunAngle)));
 
-            sun.direction = glm::normalize(glm::vec3(cos(sunAngle), -1.0f, sin(sunAngle)));
-            float elevation = glm::clamp(-sun.direction.y, 0.0f, 1.0f);
-            sun.color = glm::mix(glm::vec3(1.0f, 0.5f, 0.2f), glm::vec3(1.0f), elevation);
+            // Collisions
+            for (auto& [nameA, a] : entities) {
+                for (auto& [nameB, b] : entities) {
+                    if (a == b) continue;
+
+                    float dist = glm::distance(a->position, b->position);
+                    float combinedRadius = a->getCollisionRadius() + b->getCollisionRadius();
+
+                    if (dist < combinedRadius) {
+                        // Normalize direction from B to A
+                        glm::vec3 dir = glm::normalize(a->position - b->position);
+
+                        // Push each entity away from the other by half the overlap
+                        float overlap = combinedRadius - dist;
+                        glm::vec3 correction = dir * (overlap * 0.5f);
+
+                        a->position += correction;
+                        b->position -= correction;
+
+                        // Optional: bounce a bit (exchange momentum or apply force)
+                        a->velocity += dir * 10.0f; // tweak strength as needed
+                        b->velocity -= dir * 10.0f;
+                    }
+                }
+            }
 
             // FPS calculations
             crntTime = glfwGetTime();
@@ -393,12 +438,16 @@ int App::run(void)
                 std::cerr << "ERROR: uMVP uniform not found in shader!" << std::endl;
             }
 
-            height_map.draw(projection, view, sun);
-
+            height_map.draw(projection, view, lights);
+            if (debug) {
+                for (auto& [name, entity] : entities) {
+                    entity->drawBoundingBox(projection, view, debug_shader);
+                }
+            }
 
             // Iterate through the scene and render each model using `model.draw()`
             for (auto& [name, model] : scene) {
-                model.draw(projection, view, sun);
+                model.draw(projection, view, lights);
             }
 
             transparent.clear();
@@ -407,7 +456,7 @@ int App::run(void)
                 //entity.jump(10);
                 //entity.rotate(5, 0);
                 if (entity->model->alpha == 1) {
-                    entity->render(shader_prog_ID, projection, view, sun);
+                    entity->render(shader_prog_ID, projection, view, lights);
                 }
                 else {
                     transparent.push_back(entity);
@@ -422,7 +471,7 @@ int App::run(void)
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
             glDepthMask(GL_FALSE);
             for (Entity* entity : transparent) {
-                entity->render(shader_prog_ID, projection, view, sun);
+                entity->render(shader_prog_ID, projection, view, lights);
             }
             glDepthMask(GL_TRUE); // re-enable depth writes
 
@@ -520,6 +569,16 @@ void App::key_callback(GLFWwindow* window, int key, int scancode, int action, in
             glfwWindowHint(GLFW_SAMPLES, samples);
             //this_inst->init(samples);
             std::cout << "Switching AA to: " << samples << "x\n";
+            break;
+        case GLFW_KEY_M:
+            if (this_inst->debug) {
+                this_inst->debug = false;
+            }
+            else{
+                this_inst->debug = true;
+                std::cerr << "Box debug on"<< std::endl;
+            }
+            break;
         default:
             break;
         }

@@ -13,7 +13,7 @@ public:
     Camera(glm::vec3 startPosition, Model* entityModel = nullptr)
         : Entity(startPosition, entityModel), sensitivity(0.1f), firstMouse(true),
         lastX(400), lastY(300),
-        viewpointOffset(glm::vec3(0.0f, 1.5f, 5.0f)), // First-person offset (head position)
+        viewpointOffset(glm::vec3(0.0f, 3.0f, 0.0f)), // First-person offset (head position)
         thirdPersonOffset(glm::vec3(0.0f, 10.0f, 25.0f)), // Third-person offset (behind player)
         thirdPerson(true) // Start in first-person mode
     {
@@ -25,12 +25,13 @@ public:
 
     void processKeyboard(std::unordered_set<int> pressedKeys, float deltaTime) {
         glm::vec3 force = glm::vec3(0.0f);
+        glm::vec3 flatFront = glm::normalize(glm::vec3(front.x, 0.0f, front.z));
         // Process continuous movement
-        if (pressedKeys.count(GLFW_KEY_W)) force += front * movementSpeed;
-        if (pressedKeys.count(GLFW_KEY_S)) force -= front * movementSpeed;
+        if (pressedKeys.count(GLFW_KEY_W)) force += flatFront * movementSpeed;
+        if (pressedKeys.count(GLFW_KEY_S)) force -= flatFront * movementSpeed;
         if (pressedKeys.count(GLFW_KEY_A)) force -= right * movementSpeed;
         if (pressedKeys.count(GLFW_KEY_D)) force += right * movementSpeed;
-        if (pressedKeys.count(GLFW_KEY_SPACE)) jump(5.0f);
+        if (pressedKeys.count(GLFW_KEY_SPACE)) jump(10.0f);
 
         applyForce(force);
     }

@@ -76,7 +76,7 @@ public:
 
     //todo
     void draw(const glm::mat4& projection, const glm::mat4& view,
-        const DirectionalLight light,
+        const std::vector<LightSource*> lights,
         const glm::vec3& offset = glm::vec3(0.0f),
         const glm::vec3& rotation = glm::vec3(0.0f),
         const float alpha = 1.0f) {
@@ -107,12 +107,13 @@ public:
 
 
         // Directional light
-        glUniform3fv(glGetUniformLocation(shader.getID(), "lightDir"), 1, glm::value_ptr(light.direction));
-        glUniform3fv(glGetUniformLocation(shader.getID(), "lightColor"), 1, glm::value_ptr(light.color));
-        glUniform3fv(glGetUniformLocation(shader.getID(), "ambientColor"), 1, glm::value_ptr(light.ambient));
-        glUniform3fv(glGetUniformLocation(shader.getID(), "diffuseColor"), 1, glm::value_ptr(light.diffuse));
-        glUniform3fv(glGetUniformLocation(shader.getID(), "specularColor"), 1, glm::value_ptr(light.specular));
-
+        int dirIndex = 0, spotIndex = 0;
+        for (LightSource* light : lights) {
+            if (light->getType() == "directional") light->apply(shader.getID(), dirIndex++);
+            else if (light->getType() == "spot") light->apply(shader.getID(), spotIndex++);
+        }
+        glUniform1i(glGetUniformLocation(shader.getID(), "numDirLights"), dirIndex);
+        glUniform1i(glGetUniformLocation(shader.getID(), "numSpotLights"), spotIndex);
 
         // Material properties
         glUniform3f(glGetUniformLocation(shader.getID(), "ambientColor"), 0.2f, 0.2f, 0.2f);

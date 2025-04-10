@@ -42,9 +42,10 @@ public:
     static GLuint textureInit(const std::filesystem::path& file_name);
     static GLuint gen_tex(cv::Mat& image);
     void init_hm();
-    DirectionalLight sun;
+    std::vector<LightSource*> lights;
 
     static int aa;
+    bool debug;
 
     bool init(int aa);
     void init_assets(void);
