@@ -12,7 +12,7 @@ int main()
     auto start = std::chrono::steady_clock::now();
 
     try {
-        if (app.init(1)) {
+        if (app.init(0)) {
             app.init_assets();
             app.init_hm();
             // Load texture before running the app

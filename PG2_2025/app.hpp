@@ -35,7 +35,7 @@ private:
     std::vector<Entity*> transparent;
 
 
-    float heightScale = 30.0f;
+    float heightScale = 300.0f;
     Mesh height_map;
 public:
     App();
@@ -54,6 +54,7 @@ public:
     static void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
     static void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
     static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
+    int loadAASamplesFromConfig(const std::string& path);
 
     ~App();
 private:

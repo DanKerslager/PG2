@@ -11,6 +11,9 @@
 #include <chrono>
 #include <stack>
 #include <random>
+#include <fstream>
+#include "json.hpp"
+using json = nlohmann::json;
 
 // OpenCV (does not depend on GL)
 #include <opencv2\opencv.hpp>
@@ -37,6 +40,7 @@
 #include "ShaderProgram.hpp"
 #include "Model.hpp"
 #include "Behaviors.hpp"
+#include "Particles.hpp"
 
 GLFWwindow* window = nullptr;
 App::App()
@@ -64,9 +68,14 @@ App::~App()
     exit(EXIT_SUCCESS);
 }
 
-bool App::init(int aa = 1)
+bool App::init(int aa)
 {
     try {
+        // Step 0: Load settings
+        if (aa <= 0) {
+            aa = loadAASamplesFromConfig("settings.json");
+        }
+
         // Step 1: Initialize GLFW
         if (!glfwInit()) {
             std::cerr << "Error: Failed to initialize GLFW\n";
@@ -170,8 +179,6 @@ bool App::init(int aa = 1)
 
 
         // Step 9: Initialize OpenGL assets
-
-
 
         std::cout << "Initialized...\n";
         return true;
@@ -332,6 +339,8 @@ int App::run(void)
         debug = false;
         ShaderProgram debug_shader("assets/shaders/debug.vert",
             "assets/shaders/debug.frag");
+        ShaderProgram particle_shader("assets/shaders/particles.vert",
+            "assets/shaders/particles.frag");
         glDebugMessageControl(GL_DEBUG_SOURCE_API, GL_DEBUG_TYPE_OTHER, GL_DEBUG_SEVERITY_NOTIFICATION, 0, nullptr, GL_FALSE);
 
 
@@ -354,7 +363,7 @@ int App::run(void)
             std::cerr << "Uniform location is not found in active shader program. Did you forget to activate it?\n";
         }
 
-        //glClearColor(1.0f, 0.0f, 0.0f, 1.0f); // RED background
+        glClearColor(1.0f, 0.0f, 0.0f, 1.0f); // RED background
         glEnable(GL_DEPTH_TEST); // Enable depth testing
 
 
@@ -378,6 +387,8 @@ int App::run(void)
             float sunAngle = currentFrame * 2.0f; // radians per second
             sun->direction = glm::normalize(glm::vec3(cos(sunAngle), -1.0f, sin(sunAngle)));
 
+            Particles::update(deltaTime);
+
             // Collisions
             for (auto& [nameA, a] : entities) {
                 for (auto& [nameB, b] : entities) {
@@ -400,6 +411,18 @@ int App::run(void)
                         // Optional: bounce a bit (exchange momentum or apply force)
                         a->velocity += dir * 10.0f; // tweak strength as needed
                         b->velocity -= dir * 10.0f;
+
+                        // Get bounding box world-space centers
+                        glm::vec3 centerA = a->position + (a->model->boundingBoxMin + a->model->boundingBoxMax) * 0.5f;
+                        glm::vec3 centerB = b->position + (b->model->boundingBoxMin + b->model->boundingBoxMax) * 0.5f;
+
+                        // Midpoint between bounding box centers
+                        glm::vec3 impactPoint = (centerA + centerB) * 0.5f;
+
+                        // Spawn particles at the impact point
+                        Particles::spawn(impactPoint, 10);
+
+
                     }
                 }
             }
@@ -427,7 +450,6 @@ int App::run(void)
             glm::mat4 view = camera.getViewMatrix(); // Get updated camera view
 
             // Set transformation matrix (uMVP) for the model
-            //glm::mat4 modelMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(0, -5.0f, -10.0f)); // Move it down and back
             glm::mat4 uMVP = projection * view;
 
             GLint mvpLoc = glGetUniformLocation(shader_prog_ID, "uMVP");
@@ -449,6 +471,8 @@ int App::run(void)
             for (auto& [name, model] : scene) {
                 model.draw(projection, view, lights);
             }
+
+            Particles::drawParticles(projection, view, debug_shader);
 
             transparent.clear();
             // Render Dynamic Entities (Entities)
@@ -558,18 +582,39 @@ void App::key_callback(GLFWwindow* window, int key, int scancode, int action, in
         case GLFW_KEY_B:
             this_inst->camera.swapViewMode();
             break;
-        case GLFW_KEY_N:
-            glGetIntegerv(GL_SAMPLES, &samples);
+        case GLFW_KEY_N: {
+            samples = this_inst->loadAASamplesFromConfig("settings.json");
             switch (samples) {
             case 1: samples = 2; break;
             case 2: samples = 4; break;
             case 4: samples = 8; break;
             case 8: samples = 1; break;
             }
-            glfwWindowHint(GLFW_SAMPLES, samples);
-            //this_inst->init(samples);
-            std::cout << "Switching AA to: " << samples << "x\n";
+
+            // Save the new value to settings.json
+            std::ifstream inFile("settings.json");
+            nlohmann::json config;
+
+            if (inFile.is_open()) {
+                inFile >> config;
+                inFile.close();
+            }
+
+            config["antialiasing_samples"] = samples;
+
+            std::ofstream outFile("settings.json");
+            if (outFile.is_open()) {
+                outFile << config.dump(4); // pretty print with 4-space indentation
+                outFile.close();
+                std::cout << "Switching AA to: " << samples << "x (will apply on restart)\n";
+            }
+            else {
+                std::cerr << "Error: Could not save settings.json\n";
+            }
+
             break;
+        }
+
         case GLFW_KEY_M:
             if (this_inst->debug) {
                 this_inst->debug = false;
@@ -585,4 +630,21 @@ void App::key_callback(GLFWwindow* window, int key, int scancode, int action, in
     }
 }
 
+int App::loadAASamplesFromConfig(const std::string& path) {
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        std::cerr << "Warning: Could not open config file, using default AA = 1" << std::endl;
+        return 1; // Fallback
+    }
 
+    nlohmann::json config;
+    file >> config;
+
+    if (config.contains("antialiasing_samples") && config["antialiasing_samples"].is_number_integer()) {
+        std::cerr << "Loaded config" << std::endl;
+        return config["antialiasing_samples"];
+    }
+
+    std::cerr << "Warning: Invalid or missing 'antialiasing_samples' in config" << std::endl;
+    return 1;
+}

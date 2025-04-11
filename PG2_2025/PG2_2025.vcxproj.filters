@@ -77,10 +77,18 @@
     <ClInclude Include="Behaviors.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Particles.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Image Include="assets\box.png">
       <Filter>Resource Files</Filter>
     </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="settings.json">
+      <Filter>Resource Files</Filter>
+    </None>
   </ItemGroup>
 </Project>
