@@ -85,6 +85,12 @@
     <Image Include="assets\box.png">
       <Filter>Resource Files</Filter>
     </Image>
+    <Image Include="assets\heights.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="assets\textures\Char.png">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
   <ItemGroup>
     <None Include="settings.json">

@@ -82,69 +82,51 @@ bool App::init(int aa)
             return false;
         }
 
-        // Step 2: Create a temporary OpenGL context (for extensions)
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
-        GLFWwindow* tempWindow = glfwCreateWindow(100, 100, "Temp Context", NULL, NULL);
-        if (!tempWindow) {
-            std::cerr << "Error: Failed to create temporary GLFW window\n";
-            glfwTerminate();
-            return false;
-        }
-        glfwMakeContextCurrent(tempWindow);
-
-        // Step 3: Initialize GLEW for temporary context
-        glewExperimental = GL_TRUE;
-        if (glewInit() != GLEW_OK) {
-            std::cerr << "Error: GLEW init failed!\n";
-            glfwDestroyWindow(tempWindow);
-            glfwTerminate();
-            return false;
-        }
-        glfwWindowHint(GLFW_SAMPLES, aa);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        glDepthFunc(GL_LEQUAL);
-
-        // Step 4: Destroy temporary window & request final OpenGL context
-        glfwDestroyWindow(tempWindow);
+        // Step 2: Request core profile OpenGL context directly
         glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
         glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-        glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);  // Ensure compatibility
-
+        glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // For macOS compatibility
         glfwWindowHint(GLFW_DEPTH_BITS, 24);
+        glfwWindowHint(GLFW_SAMPLES, aa);
 
         GLFWmonitor* primaryMonitor = glfwGetPrimaryMonitor();
         const GLFWvidmode* mode = glfwGetVideoMode(primaryMonitor);
 
-        window = glfwCreateWindow(mode->width, mode->height, "OpenGL Context", primaryMonitor, NULL);
+        // === Windowed mode defaults ===
+        windowWidth = 1280;
+        windowHeight = 720;
+        windowPosX = 100;
+        windowPosY = 100;
+        fullscreen = false;
 
+        // Create window in windowed mode
+        window = glfwCreateWindow(windowWidth, windowHeight, "OpenGL Context", nullptr, nullptr);
         if (!window) {
-            std::cerr << "Error: Failed to create main GLFW window\n";
+            std::cerr << "Error: Failed to create GLFW window\n";
             glfwTerminate();
             return false;
         }
+        glfwSetWindowPos(window, windowPosX, windowPosY); // Optional: place on screen
+        glfwMakeContextCurrent(window);
+
         glfwMakeContextCurrent(window);
         if (!glfwGetCurrentContext()) {
             std::cerr << "Error: OpenGL context is NULL!\n";
             return false;
         }
 
-        int width, height;
-        glfwGetFramebufferSize(window, &width, &height);
-        glViewport(0, 0, width, height);
-
-        // Step 5: Initialize GLEW (again, for the real context)
+        // Step 3: Initialize GLEW
         glewExperimental = GL_TRUE;
         if (glewInit() != GLEW_OK) {
-            std::cerr << "Error: GLEW re-init failed!\n";
+            std::cerr << "Error: GLEW init failed!\n";
             glfwTerminate();
             return false;
         }
 
-        wglewInit(); // Initialize WGLEW after GLEW
+        wglewInit(); // Optional, only needed for some Windows-specific extensions
 
-        // Step 6: Setup OpenGL Debug Output
+        // Step 4: Setup OpenGL Debug Output
         if (GLEW_ARB_debug_output) {
             glDebugMessageCallback(MessageCallback, 0);
             glEnable(GL_DEBUG_OUTPUT);
@@ -154,7 +136,7 @@ bool App::init(int aa)
             std::cout << "GL_DEBUG NOT SUPPORTED!" << std::endl;
         }
 
-        // Step 7: Ensure OpenGL Core Profile supports DSA (Direct State Access)
+        // Step 5: Ensure DSA support
         if (!GLEW_ARB_direct_state_access) {
             std::cerr << "Error: No Direct State Access (DSA) support\n";
             return false;
@@ -162,24 +144,32 @@ bool App::init(int aa)
 
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glDepthFunc(GL_LEQUAL);
 
-
-        // Step 8: Configure V-Sync
+        // Step 6: Configure V-Sync
         App::vsync_on = true;
         glfwSwapInterval((vsync_on ? 1 : 0));
 
-        // Add mouse callback to control camera
-        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED); // Hide and lock cursor
+        // Step 7: Input callbacks
+        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
         glfwSetCursorPosCallback(window, mouse_callback);
-        glfwSetWindowUserPointer(window, this);
-
-        // Add camera callback
         glfwSetKeyCallback(window, key_callback);
         glfwSetWindowUserPointer(window, this);
 
+        // Step 8: Texture setup defaults
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-        // Step 9: Initialize OpenGL assets
+        // Step 9: Get framebuffer size and set viewport
+        int width, height;
+        glfwGetFramebufferSize(window, &width, &height);
+        glViewport(0, 0, width, height);
 
+        glfwSetFramebufferSizeCallback(window, [](GLFWwindow*, int width, int height) {
+            glViewport(0, 0, width, height);
+            });
         std::cout << "Initialized...\n";
         return true;
     }
@@ -199,7 +189,7 @@ void App::init_hm()
         throw std::runtime_error("ERR: Height map empty? File: " + hm_file.string());
     }
 
-    height_map = MapGen::GenHeightMap(hmap, 4, heightScale);
+    height_map = MapGen::GenHeightMap(hmap, 2, heightScale);
     std::cout << "Note: Heightmap vertices: " << height_map.vertices.size() << std::endl;
 }
 
@@ -278,10 +268,11 @@ void App::init_assets(void) {
     entities.emplace("teapot", new Entity(glm::vec3(20, 5, 5), teapotModel));
     entities.emplace("teapot2", new Entity(glm::vec3(30, 5, 5), teapotModel));
 
-    Model* cameraModel = new Model("assets/obj/teapot_tri_vnt.obj", my_shader);
 
+    Model* cameraModel = new Model("assets/obj/minecraft_simple_rig.obj", my_shader);
+    GLuint tex1 = textureInit("assets/textures/Char.png");
     camera.addModel(cameraModel);
-    cameraModel->setTexture(tex);
+    cameraModel->setTexture(tex1);
     entities.insert(std::make_pair("camera", &camera));
 
     Model* FishModel = new Model("assets/obj/fish.obj", my_shader);
@@ -349,6 +340,10 @@ int App::run(void)
         flashlight->color = glm::vec3(0.2f, 0.2f, 1.0f);
         flashlight->cutOff = glm::cos(glm::radians(12.5f));
         flashlight->outerCutOff = glm::cos(glm::radians(17.5f));
+		AmbientLight* ambient = new AmbientLight();
+		ambient->color = glm::vec3(0.5f, 0.5f, 0.5f);
+		PointLight* pointLight = new PointLight();
+        lights.push_back(ambient);
         lights.push_back(sun);
         lights.push_back(flashlight);
 
@@ -386,6 +381,7 @@ int App::run(void)
 
             float sunAngle = currentFrame * 2.0f; // radians per second
             sun->direction = glm::normalize(glm::vec3(cos(sunAngle), -1.0f, sin(sunAngle)));
+			pointLight->position = camera.position;
 
             Particles::update(deltaTime);
 
@@ -398,6 +394,18 @@ int App::run(void)
                     float combinedRadius = a->getCollisionRadius() + b->getCollisionRadius();
 
                     if (dist < combinedRadius) {
+                        glm::vec3 aMin = a->position + a->model->boundingBoxMin;
+                        glm::vec3 aMax = a->position + a->model->boundingBoxMax;
+                        glm::vec3 bMin = b->position + b->model->boundingBoxMin;
+                        glm::vec3 bMax = b->position + b->model->boundingBoxMax;
+
+                        bool intersects =
+                            (aMin.x <= bMax.x && aMax.x >= bMin.x) &&
+                            (aMin.y <= bMax.y && aMax.y >= bMin.y) &&
+                            (aMin.z <= bMax.z && aMax.z >= bMin.z);
+
+                        if (!intersects) continue;
+
                         // Normalize direction from B to A
                         glm::vec3 dir = glm::normalize(a->position - b->position);
 
@@ -405,8 +413,8 @@ int App::run(void)
                         float overlap = combinedRadius - dist;
                         glm::vec3 correction = dir * (overlap * 0.5f);
 
-                        a->position += correction;
-                        b->position -= correction;
+                        //a->position += correction;
+                        //b->position -= correction;
 
                         // Optional: bounce a bit (exchange momentum or apply force)
                         a->velocity += dir * 10.0f; // tweak strength as needed
@@ -420,9 +428,7 @@ int App::run(void)
                         glm::vec3 impactPoint = (centerA + centerB) * 0.5f;
 
                         // Spawn particles at the impact point
-                        Particles::spawn(impactPoint, 10);
-
-
+                        Particles::spawn(impactPoint, 100);
                     }
                 }
             }
@@ -446,7 +452,7 @@ int App::run(void)
             glUniform4f(uniform_color_location, r, g, b, a);
 
             // Camera transformation: Update `view` based on movement
-            glm::mat4 projection = glm::perspective(glm::radians(45.0f), 800.0f / 600.0f, 0.1f, 100.0f);
+            glm::mat4 projection = glm::perspective(glm::radians(45.0f), 800.0f / 600.0f, 0.1f, 1000.0f);
             glm::mat4 view = camera.getViewMatrix(); // Get updated camera view
 
             // Set transformation matrix (uMVP) for the model
@@ -624,6 +630,35 @@ void App::key_callback(GLFWwindow* window, int key, int scancode, int action, in
                 std::cerr << "Box debug on"<< std::endl;
             }
             break;
+        case GLFW_KEY_L:
+        {
+            GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+            const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+
+            if (!this_inst->fullscreen) {
+                // Save windowed mode size/position
+                glfwGetWindowPos(window, &this_inst->windowPosX, &this_inst->windowPosY);
+                glfwGetWindowSize(window, &this_inst->windowWidth, &this_inst->windowHeight);
+
+                // Switch to fullscreen
+                glfwSetWindowMonitor(window, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
+                this_inst->fullscreen = true;
+                std::cout << "Switched to fullscreen\n";
+            }
+            else {
+                // Return to saved windowed state
+                glfwSetWindowMonitor(window, nullptr,
+                    this_inst->windowPosX,
+                    this_inst->windowPosY,
+                    this_inst->windowWidth,
+                    this_inst->windowHeight,
+                    0);
+                this_inst->fullscreen = false;
+                std::cout << "Switched to windowed mode\n";
+            }
+            break;
+        }
+
         default:
             break;
         }

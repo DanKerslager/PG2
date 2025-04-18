@@ -74,7 +74,7 @@ public:
         glBindVertexArray(0);
     }
 
-    //todo
+
     void draw(const glm::mat4& projection, const glm::mat4& view,
         const std::vector<LightSource*> lights,
         const glm::vec3& offset = glm::vec3(0.0f),
@@ -106,14 +106,33 @@ public:
         glUniform1f(glGetUniformLocation(shader.getID(), "alpha"), alpha);
 
 
-        // Directional light
-        int dirIndex = 0, spotIndex = 0;
+        // Lights
+        int dirIndex = 0, spotIndex = 0, pointIndex = 0;
+        bool ambientSet = false;
+
         for (LightSource* light : lights) {
-            if (light->getType() == "directional") light->apply(shader.getID(), dirIndex++);
-            else if (light->getType() == "spot") light->apply(shader.getID(), spotIndex++);
+            std::string type = light->getType();
+
+            if (type == "directional") {
+                light->apply(shader.getID(), dirIndex++);
+            }
+            else if (type == "spot") {
+                light->apply(shader.getID(), spotIndex++);
+            }
+            else if (type == "point") {
+                light->apply(shader.getID(), pointIndex++);
+            }
+            else if (type == "ambient" && !ambientSet) {
+                light->apply(shader.getID(), 0); // only once
+                ambientSet = true;
+            }
         }
+
+        // Light counts (optional, but recommended for the shader)
         glUniform1i(glGetUniformLocation(shader.getID(), "numDirLights"), dirIndex);
         glUniform1i(glGetUniformLocation(shader.getID(), "numSpotLights"), spotIndex);
+        glUniform1i(glGetUniformLocation(shader.getID(), "numPointLights"), pointIndex);
+
 
         // Material properties
         glUniform3f(glGetUniformLocation(shader.getID(), "ambientColor"), 0.2f, 0.2f, 0.2f);

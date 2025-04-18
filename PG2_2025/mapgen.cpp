@@ -56,11 +56,12 @@ Mesh MapGen::GenHeightMap(const cv::Mat& hmap, unsigned int mesh_step_size, floa
         }
     }
 
-    GLuint texID = App::textureInit("assets/textures/heights.png");
+    GLuint texID = App::textureInit("assets/textures/tex_256.png");
+    ShaderProgram my_shader("assets/shaders/01_shaded_sample/basic.vert",
+        "assets/shaders/01_shaded_sample/basic.frag");
+    //ShaderProgram shader("assets/shaders/terrain.vert", "assets/shaders/terrain.frag");
 
-    ShaderProgram shader("assets/shaders/terrain.vert", "assets/shaders/terrain.frag");
-
-    return Mesh(GL_TRIANGLES, shader, vertices, indices, glm::vec3(0, 0, 0), glm::vec3(0, 0, 0), texID);
+    return Mesh(GL_TRIANGLES, my_shader, vertices, indices, glm::vec3(0, 0, 0), glm::vec3(0, 0, 0), texID);
 }
 
 glm::vec2 MapGen::get_subtex_st(int x, int y) {
@@ -69,13 +70,13 @@ glm::vec2 MapGen::get_subtex_st(int x, int y) {
 
 glm::vec2 MapGen::get_subtex_by_height(float height) {
     if (height > 0.9)
-        return get_subtex_st(2, 11);
+        return get_subtex_st(3, 4);
     else if (height > 0.8)
-        return get_subtex_st(3, 11);
+        return get_subtex_st(5, 0);
     else if (height > 0.5)
-        return get_subtex_st(0, 14);
-    else if (height > 0.3)
-        return get_subtex_st(2, 15);
+        return get_subtex_st(0, 1);
+    else if (height > 0.2)
+        return get_subtex_st(0, 0);
     else
-        return get_subtex_st(0, 11);
+        return get_subtex_st(15, 13);
 }

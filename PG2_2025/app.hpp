@@ -35,7 +35,7 @@ private:
     std::vector<Entity*> transparent;
 
 
-    float heightScale = 300.0f;
+    float heightScale = 50.0f;
     Mesh height_map;
 public:
     App();
@@ -46,6 +46,8 @@ public:
 
     static int aa;
     bool debug;
+    bool fullscreen;
+    int windowPosX, windowPosY, windowWidth, windowHeight;
 
     bool init(int aa);
     void init_assets(void);

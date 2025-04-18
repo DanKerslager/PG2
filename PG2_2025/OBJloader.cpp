@@ -6,86 +6,72 @@
 
 #define MAX_LINE_SIZE 255
 
-bool loadOBJ(const char* path, std::vector < glm::vec3 >& out_vertices, std::vector < glm::vec2 >& out_uvs, std::vector < glm::vec3 >& out_normals)
+bool loadOBJ(const char* path, std::vector<glm::vec3>& out_vertices, std::vector<glm::vec2>& out_uvs, std::vector<glm::vec3>& out_normals)
 {
-	std::vector< unsigned int > vertexIndices, uvIndices, normalIndices;
-	std::vector< glm::vec3 > temp_vertices;
-	std::vector< glm::vec2 > temp_uvs;
-	std::vector< glm::vec3 > temp_normals;
+    std::vector<glm::vec3> temp_vertices;
+    std::vector<glm::vec2> temp_uvs;
+    std::vector<glm::vec3> temp_normals;
 
-	out_vertices.clear();
-	out_uvs.clear();
-	out_normals.clear();
+    struct VertexIndex {
+        unsigned int v, vt, vn;
+    };
 
-	FILE* file;
-	fopen_s(&file, path, "r");
-	if (file == NULL) {
-		printf("Impossible to open the file !\n");
-		return false;
-	}
+    std::vector<VertexIndex> final_indices;
 
-	while (1) {
+    out_vertices.clear();
+    out_uvs.clear();
+    out_normals.clear();
 
-		char lineHeader[MAX_LINE_SIZE];
-		int res = fscanf_s(file, "%s", lineHeader, MAX_LINE_SIZE);
-		if (res == EOF) {
-			break;
-		}
+    FILE* file;
+    fopen_s(&file, path, "r");
+    if (!file) {
+        printf("Cannot open file: %s\n", path);
+        return false;
+    }
 
-		if (strcmp(lineHeader, "v") == 0) {
-			glm::vec3 vertex;
-			fscanf_s(file, "%f %f %f\n", &vertex.x, &vertex.y, &vertex.z);
-			temp_vertices.push_back(vertex);
-		}
-		else if (strcmp(lineHeader, "vt") == 0) {
-			glm::vec2 uv;
-			fscanf_s(file, "%f %f\n", &uv.y, &uv.x);
-			temp_uvs.push_back(uv);
-		}
-		else if (strcmp(lineHeader, "vn") == 0) {
-			glm::vec3 normal;
-			fscanf_s(file, "%f %f %f\n", &normal.x, &normal.y, &normal.z);
-			temp_normals.push_back(normal);
-		}
-		else if (strcmp(lineHeader, "f") == 0) {
-			std::string vertex1, vertex2, vertex3;
-			unsigned int vertexIndex[3], uvIndex[3], normalIndex[3];
-			int matches = fscanf_s(file, "%d/%d/%d %d/%d/%d %d/%d/%d\n", &vertexIndex[0], &uvIndex[0], &normalIndex[0], &vertexIndex[1], &uvIndex[1], &normalIndex[1], &vertexIndex[2], &uvIndex[2], &normalIndex[2]);
-			if (matches != 9) {
-				printf("File can't be read by simple parser :( Try exporting with other options\n");
-				return false;
-			}
-			vertexIndices.push_back(vertexIndex[0]);
-			vertexIndices.push_back(vertexIndex[1]);
-			vertexIndices.push_back(vertexIndex[2]);
-			uvIndices.push_back(uvIndex[0]);
-			uvIndices.push_back(uvIndex[1]);
-			uvIndices.push_back(uvIndex[2]);
-			normalIndices.push_back(normalIndex[0]);
-			normalIndices.push_back(normalIndex[1]);
-			normalIndices.push_back(normalIndex[2]);
-		}
-	}
+    char line[512];
+    while (fgets(line, sizeof(line), file)) {
+        if (strncmp(line, "v ", 2) == 0) {
+            glm::vec3 vertex;
+            sscanf_s(line, "v %f %f %f", &vertex.x, &vertex.y, &vertex.z);
+            temp_vertices.push_back(vertex);
+        }
+        else if (strncmp(line, "vt ", 3) == 0) {
+            glm::vec2 uv;
+            sscanf_s(line, "vt %f %f", &uv.y, &uv.x);  // flipped Y
+            temp_uvs.push_back(uv);
+        }
+        else if (strncmp(line, "vn ", 3) == 0) {
+            glm::vec3 normal;
+            sscanf_s(line, "vn %f %f %f", &normal.x, &normal.y, &normal.z);
+            temp_normals.push_back(normal);
+        }
+        else if (strncmp(line, "f ", 2) == 0) {
+            std::vector<VertexIndex> faceIndices;
+            char* context = nullptr;
+            char* tok = strtok_s(line + 2, " \n", &context);
+            while (tok) {
+                VertexIndex idx = { 0, 0, 0 };
+                sscanf_s(tok, "%u/%u/%u", &idx.v, &idx.vt, &idx.vn);
+                faceIndices.push_back(idx);
+                tok = strtok_s(NULL, " \n", &context);
+            }
 
-	// unroll from indirect to direct vertex specification
-	// sometimes not necessary, definitely not optimal
+            // Fan triangulation: [0, i, i+1]
+            for (size_t i = 1; i + 1 < faceIndices.size(); ++i) {
+                final_indices.push_back(faceIndices[0]);
+                final_indices.push_back(faceIndices[i]);
+                final_indices.push_back(faceIndices[i + 1]);
+            }
+        }
+    }
 
-	for (unsigned int u = 0; u < vertexIndices.size(); u++) {
-		unsigned int vertexIndex = vertexIndices[u];
-		glm::vec3 vertex = temp_vertices[vertexIndex - 1];
-		out_vertices.push_back(vertex);
-	}
-	for (unsigned int u = 0; u < uvIndices.size(); u++) {
-		unsigned int uvIndex = uvIndices[u];
-		glm::vec2 uv = temp_uvs[uvIndex - 1];
-		out_uvs.push_back(uv);
-	}
-	for (unsigned int u = 0; u < normalIndices.size(); u++) {
-		unsigned int normalIndex = normalIndices[u];
-		glm::vec3 normal = temp_normals[normalIndex - 1];
-		out_normals.push_back(normal);
-	}
+    for (auto& idx : final_indices) {
+        out_vertices.push_back(temp_vertices[idx.v - 1]);
+        out_uvs.push_back(idx.vt ? temp_uvs[idx.vt - 1] : glm::vec2(0.0f));
+        out_normals.push_back(idx.vn ? temp_normals[idx.vn - 1] : glm::vec3(0.0f, 1.0f, 0.0f));
+    }
 
-	fclose(file);
-	return true;
+    fclose(file);
+    return true;
 }

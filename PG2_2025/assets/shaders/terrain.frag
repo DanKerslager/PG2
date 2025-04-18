@@ -7,7 +7,6 @@ in vec2 TexCoords;
 out vec4 FragColor;
 
 uniform sampler2D tex0;
-uniform float alpha;
 uniform vec3 viewPos;
 
 // === Directional Light ===
@@ -90,6 +89,6 @@ void main()
 
     // Final fragment color
     vec4 texColor = texture(tex0, TexCoords);
-    vec3 litColor = texColor.rgb * result;
-    FragColor = vec4(litColor, texColor.a * alpha);
+    FragColor = vec4(texColor.rgb, 1.0);
+
 }

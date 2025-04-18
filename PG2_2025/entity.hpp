@@ -117,7 +117,11 @@ public:
     void render(GLuint shaderProgram, const glm::mat4& projection, const glm::mat4& view, const std::vector<LightSource*> lights) {
         if (model) {
             // Pass transformation data down instead of setting MVP here
-            model->draw(projection, view, lights, position, glm::vec3(0.0f, -yaw, 0.0f));
+            float modelYawOffset = -90.0f; // rotate model from +X to -Z
+
+            glm::vec3 modelRotation = glm::vec3(0.0f, -yaw + modelYawOffset, 0.0f);
+            model->draw(projection, view, lights, position, modelRotation);
+
         }
     }
 
@@ -167,7 +171,7 @@ public:
         debugShader.activate();
         // Only rotate around Y (yaw), ignore pitch for flat rotation
         glm::mat4 model = glm::translate(glm::mat4(1.0f), position) *
-            glm::rotate(glm::mat4(1.0f), glm::radians(-yaw), glm::vec3(0, 1, 0));
+            glm::rotate(glm::mat4(1.0f), glm::radians(-yaw + 90.0f), glm::vec3(0, 1, 0));
 
         glm::mat4 mvp = projection * view * model;
 

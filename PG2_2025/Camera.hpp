@@ -10,11 +10,15 @@ public:
     glm::vec3 thirdPersonOffset; // Offset behind the model
     bool thirdPerson; // Toggles view mode
 
+    float camYaw = -90.0f;   // Horizontal look angle
+    float camPitch = 0.0f;   // Vertical look angle
+    glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);  // Initial look direction
+
     Camera(glm::vec3 startPosition, Model* entityModel = nullptr)
         : Entity(startPosition, entityModel), sensitivity(0.1f), firstMouse(true),
         lastX(400), lastY(300),
         viewpointOffset(glm::vec3(0.0f, 3.0f, 0.0f)), // First-person offset (head position)
-        thirdPersonOffset(glm::vec3(0.0f, 10.0f, 25.0f)), // Third-person offset (behind player)
+        thirdPersonOffset(glm::vec3(0.0f, 5.0f, 15.0f)), // Third-person offset (behind player)
         thirdPerson(true) // Start in first-person mode
     {
     }
@@ -34,6 +38,16 @@ public:
         if (pressedKeys.count(GLFW_KEY_SPACE)) jump(10.0f);
 
         applyForce(force);
+        if (glm::length(force) > 0.001f) {
+            float yawOffset = camYaw - yaw;
+
+            // Normalize to [-180, 180] range for smooth rotation
+            if (yawOffset > 180.0f) yawOffset -= 360.0f;
+            if (yawOffset < -180.0f) yawOffset += 360.0f;
+
+            rotate(yawOffset, 0.0f);
+        }
+
     }
 
     void processMouseMovement(float xpos, float ypos) {
@@ -44,14 +58,23 @@ public:
         }
 
         float xoffset = xpos - lastX;
-        float yoffset = lastY - ypos; // Reversed since Y-coordinates go from bottom to top
+        float yoffset = lastY - ypos;
         lastX = xpos;
         lastY = ypos;
 
         xoffset *= sensitivity;
         yoffset *= sensitivity;
 
-        rotate(xoffset, yoffset);
+        camYaw += xoffset;
+        camPitch += yoffset;
+
+        camPitch = std::clamp(camPitch, -89.0f, 89.0f);
+
+        glm::vec3 direction;
+        direction.x = cos(glm::radians(camYaw)) * cos(glm::radians(camPitch));
+        direction.y = sin(glm::radians(camPitch));
+        direction.z = sin(glm::radians(camYaw)) * cos(glm::radians(camPitch));
+        cameraFront = glm::normalize(direction);
     }
 
     void swapViewMode() {
@@ -65,13 +88,14 @@ public:
     // Compute the View Matrix for rendering
     glm::mat4 getViewMatrix() {
         if (thirdPerson) {
-            return glm::lookAt(position - front * thirdPersonOffset.z + glm::vec3(0.0f, thirdPersonOffset.y, 0.0f),
-                position + front, up);
+            glm::vec3 camPos = position - cameraFront * thirdPersonOffset.z + glm::vec3(0.0f, thirdPersonOffset.y, 0.0f);
+            return glm::lookAt(camPos, position + cameraFront, up);
         }
         else {
-            return glm::lookAt(position + viewpointOffset, position + front + viewpointOffset, up);
+            return glm::lookAt(position + viewpointOffset, position + viewpointOffset + cameraFront, up);
         }
     }
+
 
     glm::vec3 getEfPos() {
         if (thirdPerson) {
