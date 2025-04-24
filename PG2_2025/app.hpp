@@ -13,6 +13,7 @@
 #include <opencv2/core.hpp>  // Ensure core OpenCV components are included
 #include "mapgen.hpp"
 #include "LightSource.hpp"
+#include "SettingManager.hpp"
 
 
 class App {
@@ -43,11 +44,10 @@ public:
     static GLuint gen_tex(cv::Mat& image);
     void init_hm();
     std::vector<LightSource*> lights;
+	SettingManager settings = SettingManager("settings.json");
 
     static int aa;
     bool debug;
-    bool fullscreen;
-    int windowPosX, windowPosY, windowWidth, windowHeight;
 
     bool init(int aa);
     void init_assets(void);

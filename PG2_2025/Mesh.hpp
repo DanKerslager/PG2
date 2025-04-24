@@ -178,23 +178,83 @@ public:
         glUniform1i(uniforms.numPointLights, pointIndex);
 	}
 
-    float getHeightAt(const glm::vec3& position) const {
-        float closestDist = 1e30f;
-        float closestHeight = 0.0f;
-
+    std::vector<Vertex> uniqueVertices;
+    void getUniques() {
         for (const auto& v : vertices) {
-            float dx = v.Position.x - position.x;
-            float dz = v.Position.z - position.z;
-            float distSq = dx * dx + dz * dz;
-
-            if (distSq < closestDist) {
-                closestDist = distSq;
-                closestHeight = v.Position.y;
+            bool isDuplicate = false;
+            for (const auto& uniqueV : uniqueVertices) {
+                if (v.Position.x == uniqueV.Position.x &&
+                    v.Position.y == uniqueV.Position.y &&
+                    v.Position.z == uniqueV.Position.z) {
+                    isDuplicate = true;
+                    break;
+                }
+            }
+            if (!isDuplicate) {
+                uniqueVertices.push_back(v);
             }
         }
 
-        return closestHeight;
     }
+
+    glm::vec3 getBarycentricCoordinates(const glm::vec3& p, const glm::vec3& v1, const glm::vec3& v2, const glm::vec3& v3) const {
+        glm::vec3 v0 = v2 - v1;
+        glm::vec3 v1Temp = v3 - v1;
+        glm::vec3 v2Temp = p - v1;
+
+        float d00 = glm::dot(v0, v0);
+        float d01 = glm::dot(v0, v1Temp);
+        float d11 = glm::dot(v1Temp, v1Temp);
+        float d20 = glm::dot(v2Temp, v0);
+        float d21 = glm::dot(v2Temp, v1Temp);
+        float denom = d00 * d11 - d01 * d01;
+
+        float v = (d11 * d20 - d01 * d21) / denom;
+        float w = (d00 * d21 - d01 * d20) / denom;
+        float u = 1.0f - v - w;
+
+        return glm::vec3(u, v, w);
+    }
+
+
+    float getHeightAt(const glm::vec3& position) const {
+    float dist1 = 1e30f, dist2 = 1e30f, dist3 = 1e30f;
+    float height1 = 0.0f, height2 = 0.0f, height3 = 0.0f;
+    glm::vec3 p1, p2, p3;  // Declare the positions of the closest vertices
+    p1 = glm::vec3(0.0f, 0.0f, 0.0f);
+    p2 = glm::vec3(0.0f, 0.0f, 0.0f);
+    p3 = glm::vec3(0.0f, 0.0f, 0.0f);
+
+    // Find the three closest vertices
+    for (const auto& v : uniqueVertices) {
+        float dx = v.Position.x - position.x;
+        float dz = v.Position.z - position.z;
+        float distSq = std::sqrt(dx * dx + dz * dz);
+
+        if (distSq < dist1) {
+            dist3 = dist2; height3 = height2;
+            dist2 = dist1; height2 = height1;
+            dist1 = distSq; height1 = v.Position.y;
+            p3 = p2; p2 = p1; p1 = v.Position;  // Set the positions of the closest vertices
+        } else if (distSq < dist2) {
+            dist3 = dist2; height3 = height2;
+            dist2 = distSq; height2 = v.Position.y;
+            p3 = p2; p2 = v.Position;
+        } else if (distSq < dist3) {
+            dist3 = distSq; height3 = v.Position.y;
+            p3 = v.Position;
+        }
+    }
+
+    // Get barycentric coordinates for the position inside the triangle
+    glm::vec3 baryCoords = getBarycentricCoordinates(position, p1, p2, p3);
+    
+    // Interpolate the heights using barycentric coordinates
+    float interpolatedHeight = baryCoords.x * height1 + baryCoords.y * height2 + baryCoords.z * height3;
+
+    return interpolatedHeight;
+    }
+
 
     void clear(void) {
         texture_id = 0;

@@ -73,9 +73,7 @@ bool App::init(int aa)
 {
     try {
         // Step 0: Load settings
-        if (aa <= 0) {
-            aa = loadAASamplesFromConfig("settings.json");
-        }
+        //settings = SettingManager("settings.json");
 
         // Step 1: Initialize GLFW
         if (!glfwInit()) {
@@ -89,26 +87,23 @@ bool App::init(int aa)
         glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
         glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // For macOS compatibility
         glfwWindowHint(GLFW_DEPTH_BITS, 24);
-        glfwWindowHint(GLFW_SAMPLES, aa);
+        if (aa <= 0) {
+            glfwWindowHint(GLFW_SAMPLES, settings.antialiasing_samples);		}
+		else {
+			glfwWindowHint(GLFW_SAMPLES, aa);
+		}
 
         GLFWmonitor* primaryMonitor = glfwGetPrimaryMonitor();
         const GLFWvidmode* mode = glfwGetVideoMode(primaryMonitor);
 
-        // === Windowed mode defaults ===
-        windowWidth = 1280;
-        windowHeight = 720;
-        windowPosX = 100;
-        windowPosY = 100;
-        fullscreen = false;
-
         // Create window in windowed mode
-        window = glfwCreateWindow(windowWidth, windowHeight, "OpenGL Context", nullptr, nullptr);
+        window = glfwCreateWindow(settings.windowWidth, settings.windowHeight, "OpenGL Context", nullptr, nullptr);
         if (!window) {
             std::cerr << "Error: Failed to create GLFW window\n";
             glfwTerminate();
             return false;
         }
-        glfwSetWindowPos(window, windowPosX, windowPosY); // Optional: place on screen
+        glfwSetWindowPos(window, settings.windowPosX, settings.windowPosY); // Optional: place on screen
         glfwMakeContextCurrent(window);
         if (!glfwGetCurrentContext()) {
             std::cerr << "Error: OpenGL context is NULL!\n";
@@ -165,6 +160,12 @@ bool App::init(int aa)
         glfwSetFramebufferSizeCallback(window, [](GLFWwindow*, int width, int height) {
             glViewport(0, 0, width, height);
             });
+
+		if (settings.fullscreen) {
+			// Set the window to fullscreen mode
+			glfwSetWindowMonitor(window, primaryMonitor, 0, 0, mode->width, mode->height, mode->refreshRate);
+		}
+
         std::cout << "Initialized...\n";
         return true;
     }
@@ -185,6 +186,7 @@ void App::init_hm()
     }
 
     height_map = MapGen::GenHeightMap(hmap, 5, heightScale);
+    height_map.getUniques();
     std::cout << "Note: Heightmap vertices: " << height_map.vertices.size() << std::endl;
 }
 
@@ -324,7 +326,6 @@ int App::run(void)
             "assets/shaders/particles.frag");
         glDebugMessageControl(GL_DEBUG_SOURCE_API, GL_DEBUG_TYPE_OTHER, GL_DEBUG_SEVERITY_NOTIFICATION, 0, nullptr, GL_FALSE);
 
-		Particles::init();
         DirectionalLight* sun = new DirectionalLight();
         SpotLight* flashlight = new SpotLight();
         flashlight->color = glm::vec3(1.0f, 0.2f, 0.0f);
@@ -333,13 +334,19 @@ int App::run(void)
 		AmbientLight* ambient = new AmbientLight();
 		ambient->color = glm::vec3(0.6f, 0.6f, 0.6f);
 		PointLight* pointLight = new PointLight();
+		pointLight->color = glm::vec3(0.0f, 1.0f, 0.0f);
+		pointLight->constant = 1.0f;
+		pointLight->linear = 0.0f;
+		pointLight->quadratic = 0.0f;
+
         lights.push_back(ambient);
         lights.push_back(sun);
         lights.push_back(flashlight);
+		lights.push_back(pointLight);
 
-        entities["teapot"]->addBehavior(Behaviors::WalkInCircle(glm::vec3(10, 0, 10), 5.0f, 10.0f));
-        entities["teapot"]->addBehavior(Behaviors::Spin());
-        entities["teapot"]->addBehavior(Behaviors::PeriodicJump(7.0f, 3.0f));
+        //entities["teapot"]->addBehavior(Behaviors::WalkInCircle(glm::vec3(10, 0, 10), 5.0f, 10.0f));
+        //entities["teapot"]->addBehavior(Behaviors::Spin());
+        //entities["teapot"]->addBehavior(Behaviors::PeriodicJump(7.0f, 3.0f));
 
 
         // Get uniform location in GPU program
@@ -348,7 +355,7 @@ int App::run(void)
             std::cerr << "Uniform location is not found in active shader program. Did you forget to activate it?\n";
         }
 
-        glClearColor(0.2f, 0.2f, 0.6f, 1.0f); // RED background
+        glClearColor(0.2f, 0.2f, 0.6f, 1.0f); // background
         glEnable(GL_DEPTH_TEST); // Enable depth testing
 
 
@@ -365,12 +372,23 @@ int App::run(void)
                 float height = height_map.getHeightAt(entity->position);
                 entity->update(deltaTime, height);
             }
-            flashlight->position = camera.position;
-            flashlight->direction = camera.front;
+            flashlight->position = camera.position + glm::vec3(0.0f, 3.0f, 0.0f);
+            flashlight->direction = camera.cameraFront;
 
-            float sunAngle = currentFrame * 2.0f; // radians per second
-            sun->direction = glm::normalize(glm::vec3(cos(sunAngle), -1.0f, sin(sunAngle)));
-			pointLight->position = camera.position;
+            float sunAngle = currentFrame * 0.3f; // speed of day cycle
+
+            // This orbits the light in a semi-circle over time
+            sun->direction = glm::normalize(glm::vec3(
+                cos(sunAngle),
+                sin(sunAngle),
+                0.0f
+            ));
+            float daylight = glm::clamp(sin(sunAngle), 0.0f, 1.0f);
+            sun->color = glm::clamp(daylight * daylight, 0.0f, 1.0f) * glm::vec3(1.0f, 0.95f, 0.85f);
+            ambient->color = glm::vec3(0.4f, 0.4f, 0.4f) + daylight;
+
+
+            pointLight->position = camera.position+glm::vec3(0.0f, 20.0f, 0.0f);
 
             Particles::update(deltaTime);
 
@@ -414,7 +432,7 @@ int App::run(void)
                         glm::vec3 impactPoint = (centerA + centerB) * 0.5f;
 
                         // Spawn particles at the impact point
-                        Particles::spawn(impactPoint, 1000);
+                        Particles::spawn(impactPoint, 100);
                     }
                 }
             }
@@ -566,6 +584,8 @@ void App::key_callback(GLFWwindow* window, int key, int scancode, int action, in
         case GLFW_KEY_V:
             this_inst->vsync_on = !this_inst->vsync_on;
             glfwSwapInterval(this_inst->vsync_on);
+			this_inst->settings.vsync_on = this_inst->vsync_on;
+			this_inst->settings.saveSettings("settings.json");
             break;
         case GLFW_KEY_B:
             this_inst->camera.swapViewMode();
@@ -578,66 +598,41 @@ void App::key_callback(GLFWwindow* window, int key, int scancode, int action, in
             case 4: samples = 8; break;
             case 8: samples = 1; break;
             }
-
-            // Save the new value to settings.json
-            std::ifstream inFile("settings.json");
-            nlohmann::json config;
-
-            if (inFile.is_open()) {
-                inFile >> config;
-                inFile.close();
-            }
-
-            config["antialiasing_samples"] = samples;
-
-            std::ofstream outFile("settings.json");
-            if (outFile.is_open()) {
-                outFile << config.dump(4); // pretty print with 4-space indentation
-                outFile.close();
-                std::cout << "Switching AA to: " << samples << "x (will apply on restart)\n";
-            }
-            else {
-                std::cerr << "Error: Could not save settings.json\n";
-            }
-
-            break;
+            std::cout << "Switching AA to: " << samples << "x (will apply on restart)\n";
+			this_inst->settings.antialiasing_samples = samples;
+			this_inst->settings.saveSettings("settings.json");
+			break;
         }
-
         case GLFW_KEY_M:
-            if (this_inst->debug) {
-                this_inst->debug = false;
-            }
-            else{
-                this_inst->debug = true;
-                std::cerr << "Box debug on"<< std::endl;
-            }
+			this_inst->debug = !this_inst->debug;
             break;
         case GLFW_KEY_L:
         {
             GLFWmonitor* monitor = glfwGetPrimaryMonitor();
             const GLFWvidmode* mode = glfwGetVideoMode(monitor);
 
-            if (!this_inst->fullscreen) {
+            if (!this_inst->settings.fullscreen) {
                 // Save windowed mode size/position
-                glfwGetWindowPos(window, &this_inst->windowPosX, &this_inst->windowPosY);
-                glfwGetWindowSize(window, &this_inst->windowWidth, &this_inst->windowHeight);
+                glfwGetWindowPos(window, &this_inst->settings.windowPosX, &this_inst->settings.windowPosY);
+                glfwGetWindowSize(window, &this_inst->settings.windowWidth, &this_inst->settings.windowHeight);
 
                 // Switch to fullscreen
                 glfwSetWindowMonitor(window, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
-                this_inst->fullscreen = true;
+                this_inst->settings.fullscreen = true;
                 std::cout << "Switched to fullscreen\n";
             }
             else {
                 // Return to saved windowed state
                 glfwSetWindowMonitor(window, nullptr,
-                    this_inst->windowPosX,
-                    this_inst->windowPosY,
-                    this_inst->windowWidth,
-                    this_inst->windowHeight,
+                    this_inst->settings.windowPosX,
+                    this_inst->settings.windowPosY,
+                    this_inst->settings.windowWidth,
+                    this_inst->settings.windowHeight,
                     0);
-                this_inst->fullscreen = false;
+                this_inst->settings.fullscreen = false;
                 std::cout << "Switched to windowed mode\n";
             }
+			this_inst->settings.saveSettings("settings.json");
             break;
         }
 
