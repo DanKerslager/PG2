@@ -31,9 +31,11 @@
     <ClInclude Include="Behaviors.hpp" />
     <ClInclude Include="Camera.hpp" />
     <ClInclude Include="entity.hpp" />
+    <ClInclude Include="Frustum.hpp" />
     <ClInclude Include="LightSource.hpp" />
     <ClInclude Include="mapgen.hpp" />
     <ClInclude Include="Particles.hpp" />
+    <ClInclude Include="SettingManager.hpp" />
     <ClInclude Include="Vertex.hpp" />
     <ClInclude Include="gl_err_callback.h" />
     <ClInclude Include="headers.hpp" />

@@ -138,9 +138,8 @@ private:
             indices.push_back(static_cast<unsigned int>(i));
         }
 
-
         glm::vec3 center = (minBB + maxBB) * 0.5f;
-        float boundingSphereRadius = 0.0f;
+        boundingSphereRadius = 0.0f;
         for (const auto& v : vertices) {
             float dist = glm::distance(v, center);
             if (dist > boundingSphereRadius)

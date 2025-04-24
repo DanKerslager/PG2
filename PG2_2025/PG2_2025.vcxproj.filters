@@ -80,6 +80,12 @@
     <ClInclude Include="Particles.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Frustum.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SettingManager.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Image Include="assets\box.png">

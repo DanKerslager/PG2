@@ -3,6 +3,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include "Model.hpp"
 #include "LightSource.hpp"
+#include "Frustum.hpp"
 
 class Entity {
 public:
@@ -114,12 +115,12 @@ public:
     }
 
     // Render the entity
-    void render(GLuint shaderProgram, const glm::mat4& projection, const glm::mat4& view, const std::vector<LightSource*> lights) {
+    void render(const glm::mat4& projection, const glm::mat4& view, Frustum f, const std::vector<LightSource*> lights) {
+        if (!isInsideFrustum(f, model->boundingSphereRadius, position)) {
+            return; // Skip draw
+        }
         if (model) {
-            // Pass transformation data down instead of setting MVP here
-            float modelYawOffset = -90.0f; // rotate model from +X to -Z
-
-            glm::vec3 modelRotation = glm::vec3(0.0f, -yaw + modelYawOffset, 0.0f);
+            glm::vec3 modelRotation = glm::vec3(0.0f, -yaw + -90.0f, 0.0f);
             model->draw(projection, view, lights, position, modelRotation);
 
         }

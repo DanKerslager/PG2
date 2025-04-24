@@ -41,6 +41,7 @@ using json = nlohmann::json;
 #include "Model.hpp"
 #include "Behaviors.hpp"
 #include "Particles.hpp"
+#include "Frustum.hpp"
 
 GLFWwindow* window = nullptr;
 App::App()
@@ -109,8 +110,6 @@ bool App::init(int aa)
         }
         glfwSetWindowPos(window, windowPosX, windowPosY); // Optional: place on screen
         glfwMakeContextCurrent(window);
-
-        glfwMakeContextCurrent(window);
         if (!glfwGetCurrentContext()) {
             std::cerr << "Error: OpenGL context is NULL!\n";
             return false;
@@ -143,6 +142,8 @@ bool App::init(int aa)
         }
 
         glEnable(GL_BLEND);
+        glDebugMessageControl(GL_DEBUG_SOURCE_API, GL_DEBUG_TYPE_OTHER,
+            GL_DEBUG_SEVERITY_NOTIFICATION, 0, nullptr, GL_FALSE);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glDepthFunc(GL_LEQUAL);
 
@@ -156,13 +157,7 @@ bool App::init(int aa)
         glfwSetKeyCallback(window, key_callback);
         glfwSetWindowUserPointer(window, this);
 
-        // Step 8: Texture setup defaults
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-        // Step 9: Get framebuffer size and set viewport
+        // Step 8: Get framebuffer size and set viewport
         int width, height;
         glfwGetFramebufferSize(window, &width, &height);
         glViewport(0, 0, width, height);
@@ -189,7 +184,7 @@ void App::init_hm()
         throw std::runtime_error("ERR: Height map empty? File: " + hm_file.string());
     }
 
-    height_map = MapGen::GenHeightMap(hmap, 2, heightScale);
+    height_map = MapGen::GenHeightMap(hmap, 5, heightScale);
     std::cout << "Note: Heightmap vertices: " << height_map.vertices.size() << std::endl;
 }
 
@@ -211,15 +206,16 @@ GLuint App::gen_tex(cv::Mat& image)
         throw std::runtime_error("Image is empty?");
     }
 
-    // Convert grayscale to RGB if needed
+    // Convert grayscale to RGB
     if (image.channels() == 1) {
         cv::Mat converted;
         cv::cvtColor(image, converted, cv::COLOR_GRAY2RGB);
-        image = converted;  // Replace with the new 3-channel image
+        image = converted;
     }
 
     glCreateTextures(GL_TEXTURE_2D, 1, &ID);
 
+    // Allocate storage and upload data based on channel count
     switch (image.channels()) {
     case 3:
         glTextureStorage2D(ID, 1, GL_RGB8, image.cols, image.rows);
@@ -233,22 +229,19 @@ GLuint App::gen_tex(cv::Mat& image)
         throw std::runtime_error("Unsupported number of channels in texture: " + std::to_string(image.channels()));
     }
 
-    // Mipmap generation and filtering
+    // Set filtering and wrap modes (must be done after texture is created)
     glTextureParameteri(ID, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTextureParameteri(ID, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glGenerateTextureMipmap(ID);
-
     glTextureParameteri(ID, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTextureParameteri(ID, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+    // Generate mipmaps *after* texture data upload
+    glGenerateTextureMipmap(ID);
 
     return ID;
 }
 
 void App::init_assets(void) {
-    //
-    // Initialize pipeline: compile, link and use shaders
-    //
-
     // SHADERS - define & compile & link
     ShaderProgram my_shader("assets/shaders/01_shaded_sample/basic.vert",
         "assets/shaders/01_shaded_sample/basic.frag");
@@ -257,9 +250,6 @@ void App::init_assets(void) {
         std::cerr << "Error: Shader program is invalid!" << std::endl;
         return;
     }
-    glUseProgram(shader_prog_ID);
-
-    scene.emplace("plane", Model("assets/obj/plane_tri_vnt.obj", my_shader));
 
     Model* teapotModel = new Model("assets/obj/teapot_tri_vnt.obj", my_shader);
     GLuint tex = textureInit("assets/box.png");
@@ -334,14 +324,14 @@ int App::run(void)
             "assets/shaders/particles.frag");
         glDebugMessageControl(GL_DEBUG_SOURCE_API, GL_DEBUG_TYPE_OTHER, GL_DEBUG_SEVERITY_NOTIFICATION, 0, nullptr, GL_FALSE);
 
-
+		Particles::init();
         DirectionalLight* sun = new DirectionalLight();
         SpotLight* flashlight = new SpotLight();
-        flashlight->color = glm::vec3(0.2f, 0.2f, 1.0f);
-        flashlight->cutOff = glm::cos(glm::radians(12.5f));
-        flashlight->outerCutOff = glm::cos(glm::radians(17.5f));
+        flashlight->color = glm::vec3(1.0f, 0.2f, 0.0f);
+        flashlight->cutOff = glm::cos(glm::radians(20.5f));
+        flashlight->outerCutOff = glm::cos(glm::radians(27.5f));
 		AmbientLight* ambient = new AmbientLight();
-		ambient->color = glm::vec3(0.5f, 0.5f, 0.5f);
+		ambient->color = glm::vec3(0.6f, 0.6f, 0.6f);
 		PointLight* pointLight = new PointLight();
         lights.push_back(ambient);
         lights.push_back(sun);
@@ -358,7 +348,7 @@ int App::run(void)
             std::cerr << "Uniform location is not found in active shader program. Did you forget to activate it?\n";
         }
 
-        glClearColor(1.0f, 0.0f, 0.0f, 1.0f); // RED background
+        glClearColor(0.2f, 0.2f, 0.6f, 1.0f); // RED background
         glEnable(GL_DEPTH_TEST); // Enable depth testing
 
 
@@ -374,7 +364,6 @@ int App::run(void)
             for (auto& [name, entity] : entities) {
                 float height = height_map.getHeightAt(entity->position);
                 entity->update(deltaTime, height);
-                
             }
             flashlight->position = camera.position;
             flashlight->direction = camera.front;
@@ -413,10 +402,7 @@ int App::run(void)
                         float overlap = combinedRadius - dist;
                         glm::vec3 correction = dir * (overlap * 0.5f);
 
-                        //a->position += correction;
-                        //b->position -= correction;
-
-                        // Optional: bounce a bit (exchange momentum or apply force)
+                        // bounce a bit (exchange momentum or apply force)
                         a->velocity += dir * 10.0f; // tweak strength as needed
                         b->velocity -= dir * 10.0f;
 
@@ -428,7 +414,7 @@ int App::run(void)
                         glm::vec3 impactPoint = (centerA + centerB) * 0.5f;
 
                         // Spawn particles at the impact point
-                        Particles::spawn(impactPoint, 100);
+                        Particles::spawn(impactPoint, 1000);
                     }
                 }
             }
@@ -454,6 +440,8 @@ int App::run(void)
             // Camera transformation: Update `view` based on movement
             glm::mat4 projection = glm::perspective(glm::radians(45.0f), 800.0f / 600.0f, 0.1f, 1000.0f);
             glm::mat4 view = camera.getViewMatrix(); // Get updated camera view
+
+            Frustum frustum = extractFrustum(projection * view);
 
             // Set transformation matrix (uMVP) for the model
             glm::mat4 uMVP = projection * view;
@@ -483,10 +471,8 @@ int App::run(void)
             transparent.clear();
             // Render Dynamic Entities (Entities)
             for (auto& [name, entity] : entities) {
-                //entity.jump(10);
-                //entity.rotate(5, 0);
                 if (entity->model->alpha == 1) {
-                    entity->render(shader_prog_ID, projection, view, lights);
+                    entity->render(projection, view, frustum, lights);
                 }
                 else {
                     transparent.push_back(entity);
@@ -497,13 +483,9 @@ int App::run(void)
                 return glm::distance(camera.getEfPos(), a->position) > glm::distance(camera.getEfPos(), b->position);
                 });
 
-            glEnable(GL_BLEND);
-            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-            glDepthMask(GL_FALSE);
             for (Entity* entity : transparent) {
-                entity->render(shader_prog_ID, projection, view, lights);
+                entity->render(projection, view, frustum, lights);
             }
-            glDepthMask(GL_TRUE); // re-enable depth writes
 
             // Poll events and swap buffers
             glfwPollEvents();

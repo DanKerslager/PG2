@@ -25,6 +25,25 @@ public:
     GLenum primitive_type = GL_POINT;
     ShaderProgram shader;
 
+    struct UniformLocations {
+        GLint uMVP = -1;
+        GLint uModel = -1;
+        GLint alpha = -1;
+        GLint ambientColor = -1;
+        GLint diffuseColor = -1;
+        GLint specularColor = -1;
+        GLint shininess = -1;
+        GLint viewPos = -1;
+        GLint tex0 = -1;
+
+        GLint numDirLights = -1;
+        GLint numSpotLights = -1;
+        GLint numPointLights = -1;
+    };
+
+    UniformLocations uniforms;
+    GLuint id;
+
     // Mesh material
     glm::vec4 ambient_material{ 1.0f }; // White, non-transparent 
     glm::vec4 diffuse_material{ 1.0f }; // White, non-transparent 
@@ -72,6 +91,8 @@ public:
 
 
         glBindVertexArray(0);
+
+        cacheUniformLocations();
     }
 
 
@@ -93,19 +114,42 @@ public:
         }
 
         // === TRANSFORMS ===
-        glm::mat4 model = glm::translate(glm::mat4(1.0f), origin + offset) *
-            glm::rotate(glm::mat4(1.0f), glm::radians(rotation.x), glm::vec3(1, 0, 0)) *
-            glm::rotate(glm::mat4(1.0f), glm::radians(rotation.y), glm::vec3(0, 1, 0)) *
-            glm::rotate(glm::mat4(1.0f), glm::radians(rotation.z), glm::vec3(0, 0, 1));
+        glm::quat q = glm::quat(glm::radians(rotation));
+        glm::mat4 rotationMatrix = glm::mat4_cast(q);
+        glm::mat4 model = glm::translate(glm::mat4(1.0f), origin + offset) * rotationMatrix;
 
         glm::mat4 mvp = projection * view * model;
 
         // === UNIFORMS ===
-        glUniformMatrix4fv(glGetUniformLocation(shader.getID(), "uMVP"), 1, GL_FALSE, glm::value_ptr(mvp));
-        glUniformMatrix4fv(glGetUniformLocation(shader.getID(), "uModel"), 1, GL_FALSE, glm::value_ptr(model));
-        glUniform1f(glGetUniformLocation(shader.getID(), "alpha"), alpha);
+        glUniformMatrix4fv(uniforms.uMVP, 1, GL_FALSE, glm::value_ptr(mvp));
+        glUniformMatrix4fv(uniforms.uModel, 1, GL_FALSE, glm::value_ptr(model));
+        glUniform1f(uniforms.alpha, alpha);
 
+		applyLights(lights);
 
+        // Material properties
+        glUniform3f(uniforms.ambientColor, 0.2f, 0.2f, 0.2f);
+        glUniform3f(uniforms.diffuseColor, 0.8f, 0.8f, 0.8f);
+        glUniform3f(uniforms.specularColor, 1.0f, 1.0f, 1.0f);
+        glUniform1f(uniforms.shininess, 32.0f);
+
+        // Pass camera position (reverse-transform from view matrix)
+        glm::vec3 cameraPosition = glm::vec3(glm::inverse(view)[3]);
+        glUniform3fv(uniforms.viewPos, 1, glm::value_ptr(cameraPosition));
+
+        // Texture binding
+        if (texture_id > 0) {
+            glBindTextureUnit(0, texture_id);
+            glUniform1i(uniforms.tex0, 0);
+        }
+
+        // === DRAW ===
+        glBindVertexArray(VAO);
+        glDrawElements(primitive_type, indices.size(), GL_UNSIGNED_INT, 0);
+        glBindVertexArray(0);
+    }
+
+	void applyLights(const std::vector<LightSource*>& lights) {
         // Lights
         int dirIndex = 0, spotIndex = 0, pointIndex = 0;
         bool ambientSet = false;
@@ -129,33 +173,10 @@ public:
         }
 
         // Light counts (optional, but recommended for the shader)
-        glUniform1i(glGetUniformLocation(shader.getID(), "numDirLights"), dirIndex);
-        glUniform1i(glGetUniformLocation(shader.getID(), "numSpotLights"), spotIndex);
-        glUniform1i(glGetUniformLocation(shader.getID(), "numPointLights"), pointIndex);
-
-
-        // Material properties
-        glUniform3f(glGetUniformLocation(shader.getID(), "ambientColor"), 0.2f, 0.2f, 0.2f);
-        glUniform3f(glGetUniformLocation(shader.getID(), "diffuseColor"), 0.8f, 0.8f, 0.8f);
-        glUniform3f(glGetUniformLocation(shader.getID(), "specularColor"), 1.0f, 1.0f, 1.0f);
-        glUniform1f(glGetUniformLocation(shader.getID(), "shininess"), 32.0f);
-
-        // Pass camera position (reverse-transform from view matrix)
-        glm::vec3 cameraPosition = glm::vec3(glm::inverse(view)[3]); // extract camera world pos
-        glUniform3fv(glGetUniformLocation(shader.getID(), "viewPos"), 1, glm::value_ptr(cameraPosition));
-
-        // Texture binding
-        if (texture_id > 0) {
-            glBindTextureUnit(0, texture_id);
-            glUniform1i(glGetUniformLocation(shader.getID(), "tex0"), 0);
-        }
-
-        // === DRAW ===
-        glBindVertexArray(VAO);
-        glDrawElements(primitive_type, indices.size(), GL_UNSIGNED_INT, 0);
-        glBindVertexArray(0);
-    }
-
+        glUniform1i(uniforms.numDirLights, dirIndex);
+        glUniform1i(uniforms.numSpotLights, spotIndex);
+        glUniform1i(uniforms.numPointLights, pointIndex);
+	}
 
     float getHeightAt(const glm::vec3& position) const {
         float closestDist = 1e30f;
@@ -200,4 +221,23 @@ public:
 private:
     // OpenGL buffer IDs
     unsigned int VAO{ 0 }, VBO{ 0 }, EBO{ 0 };
+
+    void cacheUniformLocations() {
+        id = shader.getID();
+
+        uniforms.uMVP = glGetUniformLocation(id, "uMVP");
+        uniforms.uModel = glGetUniformLocation(id, "uModel");
+        uniforms.alpha = glGetUniformLocation(id, "alpha");
+        uniforms.ambientColor = glGetUniformLocation(id, "ambientColor");
+        uniforms.diffuseColor = glGetUniformLocation(id, "diffuseColor");
+        uniforms.specularColor = glGetUniformLocation(id, "specularColor");
+        uniforms.shininess = glGetUniformLocation(id, "shininess");
+        uniforms.viewPos = glGetUniformLocation(id, "viewPos");
+        uniforms.tex0 = glGetUniformLocation(id, "tex0");
+
+        uniforms.numDirLights = glGetUniformLocation(id, "numDirLights");
+        uniforms.numSpotLights = glGetUniformLocation(id, "numSpotLights");
+        uniforms.numPointLights = glGetUniformLocation(id, "numPointLights");
+    }
+
 };
