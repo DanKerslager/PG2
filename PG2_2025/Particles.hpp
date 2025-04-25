@@ -15,7 +15,7 @@ namespace Particles {
         bool active = false;
     };
 
-    constexpr int MAX_PARTICLES = 100;
+    constexpr int MAX_PARTICLES = 10000;
     inline std::vector<Particle> pool(MAX_PARTICLES);
 
     // Call this each frame

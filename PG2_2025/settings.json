@@ -1,7 +1,7 @@
 {
-    "antialiasing_samples": 4,
+    "antialiasing_samples": 8,
     "fullscreen": true,
-    "vsync_on": true,
+    "vsync_on": false,
     "windowHeight": 720,
     "windowPosX": 100,
     "windowPosY": 100,

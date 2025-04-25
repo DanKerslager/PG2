@@ -73,8 +73,6 @@ bool App::init(int aa)
 {
     try {
         // Step 0: Load settings
-        //settings = SettingManager("settings.json");
-
         // Step 1: Initialize GLFW
         if (!glfwInit()) {
             std::cerr << "Error: Failed to initialize GLFW\n";
@@ -150,6 +148,8 @@ bool App::init(int aa)
         glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
         glfwSetCursorPosCallback(window, mouse_callback);
         glfwSetKeyCallback(window, key_callback);
+        glfwSetScrollCallback(window, scroll_callback);
+		glfwSetMouseButtonCallback(window, mouse_button_callback);
         glfwSetWindowUserPointer(window, this);
 
         // Step 8: Get framebuffer size and set viewport
@@ -165,6 +165,9 @@ bool App::init(int aa)
 			// Set the window to fullscreen mode
 			glfwSetWindowMonitor(window, primaryMonitor, 0, 0, mode->width, mode->height, mode->refreshRate);
 		}
+
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glfwSwapBuffers(window);
 
         std::cout << "Initialized...\n";
         return true;
@@ -252,6 +255,8 @@ void App::init_assets(void) {
         std::cerr << "Error: Shader program is invalid!" << std::endl;
         return;
     }
+    glUseProgram(shader_prog_ID);
+
 
     Model* teapotModel = new Model("assets/obj/teapot_tri_vnt.obj", my_shader);
     GLuint tex = textureInit("assets/box.png");
@@ -260,6 +265,9 @@ void App::init_assets(void) {
     entities.emplace("teapot", new Entity(glm::vec3(20, 5, 5), teapotModel));
     entities.emplace("teapot2", new Entity(glm::vec3(30, 5, 5), teapotModel));
 
+    Model* teapotModel2 = new Model("assets/obj/teapot_tri_vnt.obj", my_shader);
+    teapotModel2->setTexture(tex);
+    entities.emplace("teapot3", new Entity(glm::vec3(40, 5, 5), teapotModel2));
 
     Model* cameraModel = new Model("assets/obj/minecraft_simple_rig.obj", my_shader);
     GLuint tex1 = textureInit("assets/textures/Char.png");
@@ -336,18 +344,16 @@ int App::run(void)
 		PointLight* pointLight = new PointLight();
 		pointLight->color = glm::vec3(0.0f, 1.0f, 0.0f);
 		pointLight->constant = 1.0f;
-		pointLight->linear = 0.0f;
-		pointLight->quadratic = 0.0f;
+		pointLight->linear = 0.01f;
+		pointLight->quadratic = 0.01f;
 
         lights.push_back(ambient);
         lights.push_back(sun);
         lights.push_back(flashlight);
 		lights.push_back(pointLight);
 
-        //entities["teapot"]->addBehavior(Behaviors::WalkInCircle(glm::vec3(10, 0, 10), 5.0f, 10.0f));
-        //entities["teapot"]->addBehavior(Behaviors::Spin());
-        //entities["teapot"]->addBehavior(Behaviors::PeriodicJump(7.0f, 3.0f));
-
+        entities["teapot"]->addBehavior(Behaviors::WalkInCircle(glm::vec3(10, 0, 10), 50.0f, 10.0f));
+        entities["teapot"]->addBehavior(Behaviors::PeriodicJump(7.0f, 3.0f));
 
         // Get uniform location in GPU program
         GLint uniform_color_location = glGetUniformLocation(shader_prog_ID, "uniform_Color");
@@ -355,9 +361,7 @@ int App::run(void)
             std::cerr << "Uniform location is not found in active shader program. Did you forget to activate it?\n";
         }
 
-        glClearColor(0.2f, 0.2f, 0.6f, 1.0f); // background
         glEnable(GL_DEPTH_TEST); // Enable depth testing
-
 
         float lastFrame = glfwGetTime();
 
@@ -380,13 +384,14 @@ int App::run(void)
             // This orbits the light in a semi-circle over time
             sun->direction = glm::normalize(glm::vec3(
                 cos(sunAngle),
-                sin(sunAngle),
-                0.0f
+                -0.5f,
+                sin(sunAngle)
             ));
             float daylight = glm::clamp(sin(sunAngle), 0.0f, 1.0f);
             sun->color = glm::clamp(daylight * daylight, 0.0f, 1.0f) * glm::vec3(1.0f, 0.95f, 0.85f);
             ambient->color = glm::vec3(0.4f, 0.4f, 0.4f) + daylight;
 
+            glClearColor(r, g, b, 1.0f); // background
 
             pointLight->position = camera.position+glm::vec3(0.0f, 20.0f, 0.0f);
 
@@ -554,14 +559,17 @@ void App::mouse_callback(GLFWwindow* window, double xpos, double ypos) {
 
 void App::scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
     auto this_inst = static_cast<App*>(glfwGetWindowUserPointer(window));
+
+    // Scroll up
     if (yoffset > 0.0) {
-        std::cout << "wheel up...\n";
+        this_inst->camera.thirdPersonOffset -= glm::vec3(0.0f, 1.0f, 3.0f);
     }
-    this_inst->g += 0.05;
-    if (this_inst->g >= 1.0) {
-        this_inst->g = 0;
+    // Scroll down
+    else if (yoffset < 0.0) {
+        this_inst->camera.thirdPersonOffset += glm::vec3(0.0f, 1.0f, 3.0f);
     }
 }
+
 
 void App::key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
     auto this_inst = static_cast<App*>(glfwGetWindowUserPointer(window));
@@ -591,7 +599,7 @@ void App::key_callback(GLFWwindow* window, int key, int scancode, int action, in
             this_inst->camera.swapViewMode();
             break;
         case GLFW_KEY_N: {
-            samples = this_inst->loadAASamplesFromConfig("settings.json");
+            samples = this_inst->settings.antialiasing_samples;
             switch (samples) {
             case 1: samples = 2; break;
             case 2: samples = 4; break;
@@ -640,23 +648,4 @@ void App::key_callback(GLFWwindow* window, int key, int scancode, int action, in
             break;
         }
     }
-}
-
-int App::loadAASamplesFromConfig(const std::string& path) {
-    std::ifstream file(path);
-    if (!file.is_open()) {
-        std::cerr << "Warning: Could not open config file, using default AA = 1" << std::endl;
-        return 1; // Fallback
-    }
-
-    nlohmann::json config;
-    file >> config;
-
-    if (config.contains("antialiasing_samples") && config["antialiasing_samples"].is_number_integer()) {
-        std::cerr << "Loaded config" << std::endl;
-        return config["antialiasing_samples"];
-    }
-
-    std::cerr << "Warning: Invalid or missing 'antialiasing_samples' in config" << std::endl;
-    return 1;
 }

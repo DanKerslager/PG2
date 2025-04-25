@@ -34,7 +34,7 @@ public:
     // Constructor
     Model(const std::filesystem::path& filename, ShaderProgram& shader)
         : shader(shader) {
-        loadModelAsync(filename);
+        loadModel(filename);
     }
 
     // Delete Copy Constructor & Assignment
@@ -86,12 +86,6 @@ public:
     }
 
 private:
-    void loadModelAsync(const std::filesystem::path& path) {
-        std::cout << "Debug: Starting async model load for " << path << std::endl;
-        loadModel(path); // Directly call loadModel instead of deferring
-    }
-
-
     void loadModel(const std::filesystem::path& path) {
         // Check if the shader is valid before using it
         if (!glIsProgram(shader.getID())) {
@@ -148,6 +142,14 @@ private:
 
         boundingBoxMin = minBB;
         boundingBoxMax = maxBB;
+        std::cout << "Y offset: " << minBB.y << std::endl;
+
+        // Compute origin shift so the model "stands" on the ground and is centered horizontally
+        glm::vec3 OriginOffset = glm::vec3((minBB.x + maxBB.x) * 0.5f, minBB.y, (minBB.z + maxBB.z) * 0.5f);
+		boundingBoxMax -= OriginOffset;
+		boundingBoxMin -= OriginOffset;
+		// Move the origin to the center of the model
+		origin -= OriginOffset;
 
         std::cout << "   Final Vertex Count: " << vertexData.size() << std::endl;
         std::cout << "   Index Count: " << indices.size() << std::endl;

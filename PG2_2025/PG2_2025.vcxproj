@@ -48,6 +48,7 @@
   <ItemGroup>
     <Image Include="assets\box.png" />
     <Image Include="assets\heights.png" />
+    <Image Include="assets\loading.png" />
     <Image Include="assets\textures\Char.png" />
   </ItemGroup>
   <ItemGroup>

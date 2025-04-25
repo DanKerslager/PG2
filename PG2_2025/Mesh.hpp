@@ -117,7 +117,6 @@ public:
         glm::quat q = glm::quat(glm::radians(rotation));
         glm::mat4 rotationMatrix = glm::mat4_cast(q);
         glm::mat4 model = glm::translate(glm::mat4(1.0f), origin + offset) * rotationMatrix;
-
         glm::mat4 mvp = projection * view * model;
 
         // === UNIFORMS ===

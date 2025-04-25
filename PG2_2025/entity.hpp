@@ -121,8 +121,7 @@ public:
         }
         if (model) {
             glm::vec3 modelRotation = glm::vec3(0.0f, -yaw + -90.0f, 0.0f);
-            model->draw(projection, view, lights, position, modelRotation);
-
+            model->draw(projection, view, lights, position-model->origin, modelRotation);
         }
     }
 
@@ -133,7 +132,7 @@ public:
         }
 
         if (model->boundingBoxMin == model->boundingBoxMax) {
-            std::cerr << "[drawBoundingBox] Warning: Bounding box is degenerate (likely uninitialized).\n";
+            std::cerr << "[drawBoundingBox] Warning: Bounding box is degenerate.\n";
             return;
         }
 
@@ -158,33 +157,36 @@ public:
         for (int i = 0; i < 24; ++i)
             lines.push_back(corners[indices[i]]);
 
-        GLuint VAO = 0, VBO = 0;
-        glGenVertexArrays(1, &VAO);
-        glGenBuffers(1, &VBO);
+        // === DSA Setup ===
+        GLuint VAO, VBO;
+        glCreateVertexArrays(1, &VAO);
+        glCreateBuffers(1, &VBO);
 
-        glBindVertexArray(VAO);
-        glBindBuffer(GL_ARRAY_BUFFER, VBO);
-        glBufferData(GL_ARRAY_BUFFER, lines.size() * sizeof(glm::vec3), lines.data(), GL_STATIC_DRAW);
+        glNamedBufferData(VBO, lines.size() * sizeof(glm::vec3), lines.data(), GL_STATIC_DRAW);
+        glVertexArrayVertexBuffer(VAO, 0, VBO, 0, sizeof(glm::vec3));
 
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), nullptr);
+        glEnableVertexArrayAttrib(VAO, 0);
+        glVertexArrayAttribFormat(VAO, 0, 3, GL_FLOAT, GL_FALSE, 0);
+        glVertexArrayAttribBinding(VAO, 0, 0);
 
-        debugShader.activate();
-        // Only rotate around Y (yaw), ignore pitch for flat rotation
-        glm::mat4 model = glm::translate(glm::mat4(1.0f), position) *
+        // === Set uniforms without binding shader ===
+        glm::mat4 modelMat = glm::translate(glm::mat4(1.0f), position) *
             glm::rotate(glm::mat4(1.0f), glm::radians(-yaw + 90.0f), glm::vec3(0, 1, 0));
 
-        glm::mat4 mvp = projection * view * model;
+        glm::mat4 mvp = projection * view * modelMat;
 
-        debugShader.setUniform("uMVP", mvp);
-        debugShader.setUniform("color", glm::vec4(1, 0, 0, 1)); // Red
+        GLuint programID = debugShader.getID();
+        glProgramUniformMatrix4fv(programID, glGetUniformLocation(programID, "uMVP"), 1, GL_FALSE, glm::value_ptr(mvp));
+        glProgramUniform4f(programID, glGetUniformLocation(programID, "color"), 1.0f, 0.0f, 0.0f, 1.0f);
 
+        // Draw without binding
+        glUseProgram(programID);
         glBindVertexArray(VAO);
         glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(lines.size()));
         glBindVertexArray(0);
+        glUseProgram(0);
 
         glDeleteBuffers(1, &VBO);
         glDeleteVertexArrays(1, &VAO);
     }
-
 };
